@@ -8,6 +8,9 @@ path = "C:/users/kere4/Downloads/{file_name}"
 def find_duplicates(input_file, output_file):
     # 讀取CSV文件，確保正確處理中文編碼
     df = pd.read_csv(input_file, encoding='utf-8-sig')
+    # 清理欄位名稱，去除多餘的空格和換行符號
+    df.columns = df.columns.str.strip().str.replace('\n',
+                                                    '').str.replace('\r', '')
     # 按 Q 和遊戲名稱分組，找出重複的記錄
     # duplicates = df[df.duplicated(subset=['Q', '遊戲名稱'], keep=False)]
     duplicates = df[df.duplicated(subset=['玩家問題', '遊戲名稱'], keep=False)]
@@ -25,6 +28,9 @@ def find_duplicates(input_file, output_file):
 def find_duplicates_with_different_categories(input_file, output_file):
     # 讀取CSV文件，確保正確處理中文編碼
     df = pd.read_csv(input_file, encoding='utf-8-sig')
+    # 清理欄位名稱，去除多餘的空格和換行符號
+    df.columns = df.columns.str.strip().str.replace('\n',
+                                                    '').str.replace('\r', '')
 
     # 排除細項分類為空的記錄s
     #df = df[df['細項分類'].notna() & (df['細項分類'] != '')]
@@ -48,6 +54,9 @@ def find_duplicates_with_different_categories(input_file, output_file):
 def update_original_file(input_file, duplicates):
     # 讀取原始文件
     df = pd.read_csv(input_file, encoding='utf-8-sig')
+    # 清理欄位名稱，去除多餘的空格和換行符號
+    df.columns = df.columns.str.strip().str.replace('\n',
+                                                    '').str.replace('\r', '')
 
     # 更新原始文件中的數據
     for index, row in duplicates.iterrows():
@@ -63,6 +72,9 @@ def update_original_file(input_file, duplicates):
 def remove_duplicates(input_file, output_file):
     # 讀取CSV文件，確保正確處理中文編碼
     df = pd.read_csv(input_file, encoding='utf-8-sig')
+    # 清理欄位名稱，去除多餘的空格和換行符號
+    df.columns = df.columns.str.strip().str.replace('\n',
+                                                    '').str.replace('\r', '')
 
     # 將細項分類為空的值替換為 np.nan，便於排序
     df['細項分類'] = df['細項分類'].replace('', np.nan)

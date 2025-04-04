@@ -121,6 +121,9 @@
                     console.log('Columns:', result.columns);
                     console.log('Total rows:', result.total_rows);
 
+                    // 保存完整的檔案內容到 window.fileContent
+                    window.fileContent = result.file_content;
+
                     // 顯示總筆數
                     document.getElementById('totalRows').innerText = `總筆數: ${result.total_rows}`;
 
@@ -129,10 +132,12 @@
                     const columns = result.columns;
                     const previewContainer = document.getElementById('preview');
                     const columnsContainer = document.getElementById('columns');
+                    const displayColumnsContainer = document.getElementById('displayColumns');
 
                     // 清空之前的內容
                     previewContainer.innerHTML = '';
                     columnsContainer.innerHTML = '';
+                    displayColumnsContainer.innerHTML = '';
 
                     // 建立表格
                     const table = document.createElement('table');
@@ -144,6 +149,7 @@
                     columns.forEach(column => {
                         const th = document.createElement('th');
                         th.textContent = column;
+                        th.setAttribute('data-column', column);
                         headerRow.appendChild(th);
                     });
                     thead.appendChild(headerRow);
@@ -154,6 +160,7 @@
                         columns.forEach(column => {
                             const td = document.createElement('td');
                             td.textContent = row[column] || '';
+                            td.setAttribute('data-column', column);
                             tr.appendChild(td);
                         });
                         tbody.appendChild(tr);
@@ -163,26 +170,41 @@
                     table.appendChild(tbody);
                     previewContainer.appendChild(table);
 
-                    // 動態生成欄位選單
+                    // 動態生成檢查欄位和顯示欄位選單
                     columns.forEach(column => {
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.name = 'columns';
-                        checkbox.value = column;
+                        // 檢查欄位
+                        const checkCheckbox = document.createElement('input');
+                        checkCheckbox.type = 'checkbox';
+                        checkCheckbox.name = 'columns';
+                        checkCheckbox.value = column;
 
-                        const label = document.createElement('label');
-                        label.textContent = column;
-                        label.appendChild(checkbox);
+                        const checkLabel = document.createElement('label');
+                        checkLabel.textContent = column;
+                        checkLabel.appendChild(checkCheckbox);
 
-                        const div = document.createElement('div');
-                        div.appendChild(checkbox);
-                        div.appendChild(label);
+                        const checkDiv = document.createElement('div');
+                        checkDiv.appendChild(checkCheckbox);
+                        checkDiv.appendChild(checkLabel);
 
-                        columnsContainer.appendChild(div);
+                        columnsContainer.appendChild(checkDiv);
+
+                        // 顯示欄位
+                        const displayCheckbox = document.createElement('input');
+                        displayCheckbox.type = 'checkbox';
+                        displayCheckbox.name = 'displayColumns';
+                        displayCheckbox.value = column;
+                        displayCheckbox.checked = true; // 預設顯示所有欄位
+
+                        const displayLabel = document.createElement('label');
+                        displayLabel.textContent = column;
+                        displayLabel.appendChild(displayCheckbox);
+
+                        const displayDiv = document.createElement('div');
+                        displayDiv.appendChild(displayCheckbox);
+                        displayDiv.appendChild(displayLabel);
+
+                        displayColumnsContainer.appendChild(displayDiv);
                     });
-
-                    // 保存完整的資料內容
-                    window.fileContent = result.file_content;
                 }
             } catch (error) {
                 loadingIndicator.style.display = 'none'; // 隱藏 loading 圈圈
@@ -235,9 +257,11 @@
 
                     // 建立表頭
                     const headerRow = document.createElement('tr');
-                    selectedColumns.forEach(column => {
+                    const columnsOrder = window.fileContent.split('\n')[0].split(',').map(column => column.trim().replace(/\n|\r|"/g, '')); // 清理欄位名稱，去除多餘的空格、換行符號和雙引號
+                    columnsOrder.forEach(column => {
                         const th = document.createElement('th');
                         th.textContent = column;
+                        th.setAttribute('data-column', column);
                         headerRow.appendChild(th);
                     });
                     thead.appendChild(headerRow);
@@ -245,9 +269,10 @@
                     // 建立表格內容
                     checkResult.duplicates.forEach(row => {
                         const tr = document.createElement('tr');
-                        selectedColumns.forEach(column => {
+                        columnsOrder.forEach(column => {
                             const td = document.createElement('td');
-                            td.textContent = row[column] || '';
+                            td.textContent = row[column] || ''; // 確保即使值為空也能顯示
+                            td.setAttribute('data-column', column);
                             tr.appendChild(td);
                         });
                         tbody.appendChild(tr);
@@ -259,26 +284,6 @@
 
                     // 顯示重複資料數量
                     document.getElementById('resultSummary').innerText = `找到 ${checkResult.duplicates.length} 筆重複資料`;
-
-                    // 動態生成顯示欄位選單
-                    const displayColumnsContainer = document.getElementById('displayColumns');
-                    displayColumnsContainer.innerHTML = '';
-                    selectedColumns.forEach(column => {
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.name = 'displayColumns';
-                        checkbox.value = column;
-
-                        const label = document.createElement('label');
-                        label.textContent = column;
-                        label.appendChild(checkbox);
-
-                        const div = document.createElement('div');
-                        div.appendChild(checkbox);
-                        div.appendChild(label);
-
-                        displayColumnsContainer.appendChild(div);
-                    });
                 }
             } catch (error) {
                 loadingResultIndicator.style.display = 'none'; // 隱藏檢查 loading 圈圈
@@ -294,21 +299,66 @@
 
             rows.forEach((row, rowIndex) => {
                 const cells = row.querySelectorAll('td, th');
-                cells.forEach((cell, cellIndex) => {
-                    if (selectedDisplayColumns.includes(cells[cellIndex].getAttribute('data-column'))) {
-                        cell.style.display = '';
+                cells.forEach((cell) => {
+                    const column = cell.getAttribute('data-column');
+                    if (selectedDisplayColumns.includes(column)) {
+                        cell.style.display = ''; // 顯示選中的欄位
                     } else {
-                        cell.style.display = 'none';
+                        cell.style.display = 'none'; // 隱藏未選中的欄位
                     }
                 });
             });
+        }
+
+        function toggleCategoryDropdown() {
+            const checkCategories = document.getElementById('checkCategories').checked;
+            const categoryDropdown = document.getElementById('categoryDropdown');
+
+            if (checkCategories) {
+                categoryDropdown.style.display = 'inline';
+
+                // 動態生成選單選項
+                const columns = window.fileContent.split('\n')[0].split(',').map(column => column.trim().replace(/\n|\r|"/g, ''));
+                categoryDropdown.innerHTML = ''; // 清空之前的選項
+
+                let defaultOption = '請選擇';
+                let foundDefault = false;
+
+                columns.forEach(column => {
+                    const option = document.createElement('option');
+                    option.value = column;
+                    option.textContent = column;
+
+                    if (column === '正確類別(子)') {
+                        option.selected = true;
+                        foundDefault = true;
+                    }
+
+                    categoryDropdown.appendChild(option);
+                });
+
+                if (!foundDefault) {
+                    const fallbackOptions = columns.filter(column => column.includes('子') || column.includes('類別'));
+                    if (fallbackOptions.length > 0) {
+                        categoryDropdown.value = fallbackOptions[0];
+                    } else {
+                        const defaultOptionElement = document.createElement('option');
+                        defaultOptionElement.value = '';
+                        defaultOptionElement.textContent = defaultOption;
+                        defaultOptionElement.selected = true;
+                        categoryDropdown.appendChild(defaultOptionElement);
+                    }
+                }
+            } else {
+                categoryDropdown.style.display = 'none';
+            }
         }
     </script>
 </head>
 
 <body>
     <div class="container">
-        <h1>Lark 重複資料檢查工具</h1>
+        <h1>資料檢查工具</h1>
 
         <h2>上傳 CSV 文件</h2>
         <input type="file" id="file" onchange="handleFileChange(event)" />
@@ -323,13 +373,21 @@
             <!-- 動態生成的欄位選單會放在這裡 -->
         </div>
         <div>
-            <input type="checkbox" id="checkCategories" />
-            <label for="checkCategories">檢查類別是否重複</label>
+            <input type="checkbox" id="checkCategories" onchange="toggleCategoryDropdown()" />
+            <label for="checkCategories">檢查類別是否不同步</label>
+            <select id="categoryDropdown" style="display: none;">
+                <!-- 動態生成的選項會放在這裡 -->
+            </select>
         </div>
         <button onclick="checkDuplicates()">檢查重複資料</button>
 
         <h2>檢查結果</h2>
         <div id="loadingResult" style="display: none; font-size: 16px; color: #555;">正在檢查重複資料，請稍候...</div>
+        <div id="displayColumns" class="checkbox-container"
+            style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+            <!-- 動態生成的顯示欄位選單會放在這裡 -->
+        </div>
+        <button onclick="updateDisplayedColumns()">更新顯示欄位</button>
         <div id="resultTableContainer" style="display: none;">
 
             <div id="resultSummary" style="margin-bottom: 10px; font-size: 16px; color: #333;"></div>
@@ -338,11 +396,7 @@
             </table>
         </div>
 
-        <div id="displayColumns" class="checkbox-container"
-            style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
-            <!-- 動態生成的顯示欄位選單會放在這裡 -->
-        </div>
-        <button onclick="updateDisplayedColumns()">更新顯示欄位</button>
+
     </div>
 </body>
 
