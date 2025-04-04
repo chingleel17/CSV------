@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lark 重複資料檢查工具</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f9f9f9;
+            max-width: 1920px;
+            /* 增加頁面寬度 */
+        }
+
+        table {
+            width: 100%;
+            max-width: 100%;
+            /* 限制表格寬度不超過頁面寬度 */
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #fff;
+            table-layout: fixed;
+            /* 固定表格布局 */
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+            word-wrap: break-word;
+            /* 自動換行 */
+            white-space: nowrap;
+            /* 單行顯示 */
+            overflow: hidden;
+            /* 超出部分隱藏 */
+            text-overflow: ellipsis;
+            /* 顯示省略號 */
+            max-height: 50px;
+            /* 限制欄高 */
+        }
+
+        th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        tr:hover {
+            background-color: #f1f1f1;
+        }
+
+        #loading {
+            display: none;
+            font-size: 16px;
+            color: #555;
+        }
+
+        .container {
+            max-width: 1920px;
+            /* 增加容器寬度 */
+            margin: auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .checkbox-container {
+            margin-top: 20px;
+        }
+
+        .checkbox-container div {
+            margin-bottom: 10px;
+        }
+    </style>
+    <script>
+        async function handleFileChange(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // 顯示 loading 圈圈
+            const loadingIndicator = document.getElementById('loading');
+            loadingIndicator.style.display = 'block';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                loadingIndicator.style.display = 'none'; // 隱藏 loading 圈圈
+
+                if (result.error) {
+                    console.error('Error from server:', result.error);
+                    alert(result.error);
+                } else {
+                    console.log('Preview data:', result.preview);
+                    console.log('Columns:', result.columns);
+                    console.log('Total rows:', result.total_rows);
+
+                    // 顯示總筆數
+                    document.getElementById('totalRows').innerText = `總筆數: ${result.total_rows}`;
+
+                    // 顯示預覽資料
+                    const preview = result.preview;
+                    const columns = result.columns;
+                    const previewContainer = document.getElementById('preview');
+                    const columnsContainer = document.getElementById('columns');
+
+                    // 清空之前的內容
+                    previewContainer.innerHTML = '';
+                    columnsContainer.innerHTML = '';
+
+                    // 建立表格
+                    const table = document.createElement('table');
+                    const thead = document.createElement('thead');
+                    const tbody = document.createElement('tbody');
+
+                    // 建立表頭
+                    const headerRow = document.createElement('tr');
+                    columns.forEach(column => {
+                        const th = document.createElement('th');
+                        th.textContent = column;
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+
+                    // 建立表格內容
+                    preview.forEach(row => {
+                        const tr = document.createElement('tr');
+                        columns.forEach(column => {
+                            const td = document.createElement('td');
+                            td.textContent = row[column] || '';
+                            tr.appendChild(td);
+                        });
+                        tbody.appendChild(tr);
+                    });
+
+                    table.appendChild(thead);
+                    table.appendChild(tbody);
+                    previewContainer.appendChild(table);
+
+                    // 動態生成欄位選單
+                    columns.forEach(column => {
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.name = 'columns';
+                        checkbox.value = column;
+
+                        const label = document.createElement('label');
+                        label.textContent = column;
+                        label.appendChild(checkbox);
+
+                        const div = document.createElement('div');
+                        div.appendChild(checkbox);
+                        div.appendChild(label);
+
+                        columnsContainer.appendChild(div);
+                    });
+
+                    // 保存完整的資料內容
+                    window.fileContent = result.file_content;
+                }
+            } catch (error) {
+                loadingIndicator.style.display = 'none'; // 隱藏 loading 圈圈
+                console.error('Error during file upload:', error);
+                alert('上傳失敗，請重試！');
+            }
+        }
+
+        async function checkDuplicates() {
+            const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
+            if (selectedColumns.length === 0) {
+                alert('請選擇至少一個欄位進行檢查！');
+                return;
+            }
+
+            const checkCategories = document.getElementById('checkCategories').checked;
+
+            // 顯示檢查 loading 圈圈
+            const loadingResultIndicator = document.getElementById('loadingResult');
+            loadingResultIndicator.style.display = 'block';
+
+            try {
+                const checkResponse = await fetch('/check_duplicates', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ file_content: window.fileContent, columns: selectedColumns, check_categories: checkCategories })
+                });
+
+                const checkResult = await checkResponse.json();
+                loadingResultIndicator.style.display = 'none'; // 隱藏檢查 loading 圈圈
+
+                if (checkResult.error) {
+                    console.error('Error from server:', checkResult.error);
+                    alert(checkResult.error);
+                } else {
+                    console.log('Duplicate check result:', checkResult.duplicates);
+
+                    // 顯示檢查結果表格
+                    const resultTableContainer = document.getElementById('resultTableContainer');
+                    resultTableContainer.style.display = 'block';
+
+                    const resultTable = document.getElementById('resultTable');
+                    resultTable.innerHTML = '';
+
+                    const table = document.createElement('table');
+                    const thead = document.createElement('thead');
+                    const tbody = document.createElement('tbody');
+
+                    // 建立表頭
+                    const headerRow = document.createElement('tr');
+                    selectedColumns.forEach(column => {
+                        const th = document.createElement('th');
+                        th.textContent = column;
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+
+                    // 建立表格內容
+                    checkResult.duplicates.forEach(row => {
+                        const tr = document.createElement('tr');
+                        selectedColumns.forEach(column => {
+                            const td = document.createElement('td');
+                            td.textContent = row[column] || '';
+                            tr.appendChild(td);
+                        });
+                        tbody.appendChild(tr);
+                    });
+
+                    table.appendChild(thead);
+                    table.appendChild(tbody);
+                    resultTable.appendChild(table);
+
+                    // 顯示重複資料數量
+                    document.getElementById('resultSummary').innerText = `找到 ${checkResult.duplicates.length} 筆重複資料`;
+
+                    // 動態生成顯示欄位選單
+                    const displayColumnsContainer = document.getElementById('displayColumns');
+                    displayColumnsContainer.innerHTML = '';
+                    selectedColumns.forEach(column => {
+                        const checkbox = document.createElement('input');
+                        checkbox.type = 'checkbox';
+                        checkbox.name = 'displayColumns';
+                        checkbox.value = column;
+
+                        const label = document.createElement('label');
+                        label.textContent = column;
+                        label.appendChild(checkbox);
+
+                        const div = document.createElement('div');
+                        div.appendChild(checkbox);
+                        div.appendChild(label);
+
+                        displayColumnsContainer.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                loadingResultIndicator.style.display = 'none'; // 隱藏檢查 loading 圈圈
+                console.error('Error during duplicate check:', error);
+                alert('檢查失敗，請重試！');
+            }
+        }
+
+        function updateDisplayedColumns() {
+            const selectedDisplayColumns = Array.from(document.querySelectorAll('input[name="displayColumns"]:checked')).map(cb => cb.value);
+            const resultTable = document.getElementById('resultTable');
+            const rows = resultTable.querySelectorAll('tr');
+
+            rows.forEach((row, rowIndex) => {
+                const cells = row.querySelectorAll('td, th');
+                cells.forEach((cell, cellIndex) => {
+                    if (selectedDisplayColumns.includes(cells[cellIndex].getAttribute('data-column'))) {
+                        cell.style.display = '';
+                    } else {
+                        cell.style.display = 'none';
+                    }
+                });
+            });
+        }
+    </script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Lark 重複資料檢查工具</h1>
+
+        <h2>上傳 CSV 文件</h2>
+        <input type="file" id="file" onchange="handleFileChange(event)" />
+        <div id="loading">正在解析檔案，請稍候...</div>
+
+        <h2>文件預覽</h2>
+        <div id="preview"></div>
+        <div id="totalRows"></div>
+
+        <h2>選擇檢查欄位</h2>
+        <div id="columns" class="checkbox-container" style="display: flex; flex-wrap: wrap; gap: 10px;">
+            <!-- 動態生成的欄位選單會放在這裡 -->
+        </div>
+        <div>
+            <input type="checkbox" id="checkCategories" />
+            <label for="checkCategories">檢查類別是否重複</label>
+        </div>
+        <button onclick="checkDuplicates()">檢查重複資料</button>
+
+        <h2>檢查結果</h2>
+        <div id="loadingResult" style="display: none; font-size: 16px; color: #555;">正在檢查重複資料，請稍候...</div>
+        <div id="resultTableContainer" style="display: none;">
+
+            <div id="resultSummary" style="margin-bottom: 10px; font-size: 16px; color: #333;"></div>
+            <table id="resultTable">
+                <!-- 檢查結果表格內容會動態生成 -->
+            </table>
+        </div>
+
+        <div id="displayColumns" class="checkbox-container"
+            style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+            <!-- 動態生成的顯示欄位選單會放在這裡 -->
+        </div>
+        <button onclick="updateDisplayedColumns()">更新顯示欄位</button>
+    </div>
+</body>
+
+</html>

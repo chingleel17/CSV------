@@ -1,0 +1,32 @@
+# 忽略 Python 編譯檔案
+*.pyc
+*.pyo
+__pycache__/
+
+# 忽略環境設定檔案
+.env
+*.env
+.venv/
+
+# 忽略 IDE 設定檔案
+.vscode/
+.idea/
+
+# 忽略操作系統產生的檔案
+.DS_Store
+Thumbs.db
+
+# 忽略日誌檔案
+*.log
+
+# 忽略上傳的檔案
+uploads/
+
+# 忽略 CSV 測試檔案
+*.csv
+
+# 忽略 Node.js 相依套件
+node_modules/
+
+# 忽略 Git 儲存庫資料
+.git/
