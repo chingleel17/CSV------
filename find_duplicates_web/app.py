@@ -20,17 +20,11 @@ def upload_file():
         return jsonify({'error': 'No file selected for upload'}), 400
 
     try:
-        # 確保檔案物件可讀取
-        content = file.stream.read()
-        if not content:
-            return jsonify({'error': 'Uploaded file is empty'}), 400
+        # 獲取用戶指定的標題行
+        header_line = int(request.form.get('header_line', 1)) - 1  # 將行號轉換為索引（從 0 開始）
 
-        try:
-            df = pd.read_csv(io.BytesIO(content), encoding='utf-8-sig')
-        except pd.errors.EmptyDataError:
-            return jsonify({'error': 'CSV 文件內容為空或格式不正確，請檢查文件'}), 400
-        except pd.errors.ParserError as e:
-            return jsonify({'error': f'CSV 文件解析錯誤: {str(e)}'}), 400
+        # 將檔案內容重新讀取為 DataFrame，指定標題行
+        df = pd.read_csv(io.BytesIO(file.stream.read()), encoding='utf-8-sig', header=header_line)
 
         if df.empty:
             return jsonify({'error': 'CSV 文件內容為空，無法進行處理'}), 400
@@ -40,6 +34,13 @@ def upload_file():
 
         # 清理欄位名稱，去除多餘的空格、換行符號和雙引號
         df.columns = df.columns.str.strip().str.replace('\n', '').str.replace('\r', '').str.replace('"', '')
+
+        # 移除最右側連續三行以上為空的欄位
+        while df.columns[-1].strip() == '' and df.iloc[:, -1].isnull().all():
+            df = df.iloc[:, :-1]
+
+        # 移除資料中完全為空的行
+        df = df.dropna(how='all')
 
         # 返回前 5 行預覽和欄位名稱，以及總筆數
         preview = df.head().to_dict(orient='records')
@@ -74,8 +75,11 @@ def check_duplicates():
         return jsonify({'error': '未選擇檢查的欄位，請選擇至少一個欄位進行檢查'}), 400
 
     try:
-        # 將檔案內容重新讀取為 DataFrame
-        df = pd.read_csv(io.StringIO(content), encoding='utf-8-sig')
+        # 獲取用戶指定的標題行
+        header_line = data.get('header_line', 1) - 1  # 將行號轉換為索引（從 0 開始）
+
+        # 將檔案內容重新讀取為 DataFrame，指定標題行
+        df = pd.read_csv(io.StringIO(content), encoding='utf-8-sig', header=header_line)
 
         if df.empty:
             return jsonify({'error': 'CSV 文件內容為空，無法進行檢查'}), 400

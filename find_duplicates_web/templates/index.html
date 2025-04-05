@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lark 重複資料檢查工具</title>
+    <title>資料檢查工具</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -101,8 +101,11 @@
             const loadingIndicator = document.getElementById('loading');
             loadingIndicator.style.display = 'block';
 
+            const headerLine = document.getElementById('headerLine').value || 1; // 獲取標題行
+
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('header_line', headerLine); // 傳遞標題行資訊
 
             try {
                 const response = await fetch('/upload', {
@@ -248,7 +251,12 @@
                     const resultTableContainer = document.getElementById('resultTableContainer');
                     resultTableContainer.style.display = 'block';
 
-                    const resultTable = document.getElementById('resultTable');
+                    let resultTable = document.getElementById('resultTable');
+                    if (!resultTable) {
+                        resultTable = document.createElement('table');
+                        resultTable.id = 'resultTable';
+                        document.getElementById('resultTableContainer').appendChild(resultTable);
+                    }
                     resultTable.innerHTML = '';
 
                     const table = document.createElement('table');
@@ -353,6 +361,43 @@
                 categoryDropdown.style.display = 'none';
             }
         }
+
+        function exportResults() {
+            const resultTable = document.getElementById('resultTable');
+            if (!resultTable || resultTable.querySelectorAll('tr').length <= 1) {
+                alert('沒有可匯出的檢查結果');
+                return;
+            }
+
+            let csvContent = '\uFEFF'; // 加入 BOM
+            const rows = resultTable.querySelectorAll('tr');
+
+            rows.forEach(row => {
+                const cells = row.querySelectorAll('th, td');
+                const rowData = Array.from(cells).map(cell => `"${cell.textContent}"`);
+                csvContent += rowData.join(',') + '\n';
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', '檢查結果.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        async function handleHeaderLineChange() {
+            const fileInput = document.getElementById('file');
+            if (!fileInput.files[0]) {
+                alert('請先選擇檔案再更新標題行！');
+                return;
+            }
+
+            // 觸發檔案重新上傳
+            handleFileChange({ target: fileInput });
+        }
     </script>
 </head>
 
@@ -360,11 +405,14 @@
     <div class="container">
         <h1>資料檢查工具</h1>
 
-        <h2>上傳 CSV 文件</h2>
-        <input type="file" id="file" onchange="handleFileChange(event)" />
+        <h2>上傳 CSV 文件: <input type="file" id="file" onchange="handleFileChange(event)" /></h2>
         <div id="loading">正在解析檔案，請稍候...</div>
 
         <h2>文件預覽</h2>
+        <div>
+            <label for="headerLine">標題行：</label>
+            <input type="number" id="headerLine" value="1" min="1" style="width: 60px;" onchange="handleHeaderLineChange()" />
+        </div>
         <div id="preview"></div>
         <div id="totalRows"></div>
 
@@ -372,14 +420,16 @@
         <div id="columns" class="checkbox-container" style="display: flex; flex-wrap: wrap; gap: 10px;">
             <!-- 動態生成的欄位選單會放在這裡 -->
         </div>
+
         <div>
             <input type="checkbox" id="checkCategories" onchange="toggleCategoryDropdown()" />
-            <label for="checkCategories">檢查類別是否不同步</label>
+            <label for="checkCategories">檢查類別是否重複</label>
             <select id="categoryDropdown" style="display: none;">
                 <!-- 動態生成的選項會放在這裡 -->
             </select>
         </div>
         <button onclick="checkDuplicates()">檢查重複資料</button>
+        <button onclick="exportResults()">匯出檢查結果</button>
 
         <h2>檢查結果</h2>
         <div id="loadingResult" style="display: none; font-size: 16px; color: #555;">正在檢查重複資料，請稍候...</div>
