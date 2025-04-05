@@ -91,6 +91,10 @@
         .checkbox-container div {
             margin-bottom: 10px;
         }
+
+        th.sortable {
+            cursor: pointer;
+        }
     </style>
     <script>
         async function handleFileChange(event) {
@@ -260,16 +264,20 @@
                     resultTable.innerHTML = '';
 
                     const table = document.createElement('table');
+                    table.id = 'resultTable';
+                    table.setAttribute('data-sort-order', 'asc');
                     const thead = document.createElement('thead');
                     const tbody = document.createElement('tbody');
 
                     // 建立表頭
                     const headerRow = document.createElement('tr');
                     const columnsOrder = window.fileContent.split('\n')[0].split(',').map(column => column.trim().replace(/\n|\r|"/g, '')); // 清理欄位名稱，去除多餘的空格、換行符號和雙引號
-                    columnsOrder.forEach(column => {
+                    columnsOrder.forEach((column, index) => {
                         const th = document.createElement('th');
                         th.textContent = column;
                         th.setAttribute('data-column', column);
+                        th.classList.add('sortable');
+                        th.setAttribute('onclick', `sortTable(${index})`);
                         headerRow.appendChild(th);
                     });
                     thead.appendChild(headerRow);
@@ -398,6 +406,36 @@
             // 觸發檔案重新上傳
             handleFileChange({ target: fileInput });
         }
+
+        function sortTable(columnIndex) {
+            const table = document.getElementById('resultTable');
+            const rows = Array.from(table.querySelectorAll('tr:nth-child(n+2)'));
+            const isAscending = table.getAttribute('data-sort-order') === 'asc';
+
+            rows.sort((rowA, rowB) => {
+                const cellA = rowA.cells[columnIndex]?.textContent.trim() || '';
+                const cellB = rowB.cells[columnIndex]?.textContent.trim() || '';
+
+                if (!isNaN(cellA) && !isNaN(cellB)) {
+                    return isAscending ? cellA - cellB : cellB - cellA;
+                }
+
+                return isAscending
+                    ? cellA.localeCompare(cellB, undefined, { numeric: true })
+                    : cellB.localeCompare(cellA, undefined, { numeric: true });
+            });
+
+            // 清空表格內容，保留表頭
+            const thead = table.querySelector('thead');
+            const tbody = table.querySelector('tbody');
+            tbody.innerHTML = '';
+
+            // 重新插入排序後的行
+            rows.forEach(row => tbody.appendChild(row));
+
+            // 更新排序狀態
+            table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
+        }
     </script>
 </head>
 
@@ -411,7 +449,8 @@
         <h2>文件預覽</h2>
         <div>
             <label for="headerLine">標題行：</label>
-            <input type="number" id="headerLine" value="1" min="1" style="width: 60px;" onchange="handleHeaderLineChange()" />
+            <input type="number" id="headerLine" value="1" min="1" style="width: 60px;"
+                onchange="handleHeaderLineChange()" />
         </div>
         <div id="preview"></div>
         <div id="totalRows"></div>
@@ -441,7 +480,7 @@
         <div id="resultTableContainer" style="display: none;">
 
             <div id="resultSummary" style="margin-bottom: 10px; font-size: 16px; color: #333;"></div>
-            <table id="resultTable">
+            <table id="resultTable" data-sort-order="asc">
                 <!-- 檢查結果表格內容會動態生成 -->
             </table>
         </div>
