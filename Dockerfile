@@ -17,4 +17,5 @@ EXPOSE 5000
 ENV FLASK_APP=find_duplicates_web/app.py
 
 # Run the application
-CMD ["flask", "run", "--host=0.0.0.0", "--port=5000"]
+# CMD ["flask", "run", "--host=0.0.0.0", "--port=5000","--reload"]
+CMD ["gunicorn", "--reload", "-b", "0.0.0.0:5000", "find_duplicates_web.app:app"]

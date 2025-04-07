@@ -109,9 +109,9 @@ def check_duplicates():
             return jsonify({'error': 'CSV 文件內容為空，無法進行檢查'}), 400
 
         # 清理資料
-        df = df.replace(r'^\s*$', pd.NA, regex=True)  # 將空白字串視為空值
+        # df = df.replace(r'^\s*$', pd.NA, regex=True)  # 將空白字串視為空值
         df = df.dropna(how='all')  # 移除所有欄位皆為空的行
-        df = df.dropna(axis=1, how='all')  # 移除所有行皆為空的欄位
+        # df = df.dropna(axis=1, how='all')  # 移除所有行皆為空的欄位
         df = df[~df.apply(lambda row: row.astype(str).str.strip().eq('').all(),
                           axis=1)]  # 移除僅包含空白字元的行
 
@@ -122,23 +122,24 @@ def check_duplicates():
             non_empty_rows = non_empty_rows[~(
                 non_empty_rows[col].isna()
                 | non_empty_rows[col].astype(str).str.strip().eq(''))]
-
+        #測試
         # 使用過濾後的資料檢查重複
         if check_categories:
             # 獲取下拉選單中選擇的類別欄位
             selected_category_column = data.get('selected_category_column',
                                                 '正確類別(子)')
 
-            if selected_category_column in df.columns:
-                # 檢查類別是否重複
-                duplicates = non_empty_rows[
-                    non_empty_rows.duplicated(subset=columns, keep=False)
-                    & ~non_empty_rows.duplicated(subset=columns +
-                                                 [selected_category_column],
-                                                 keep=False)]
-            else:
-                duplicates = non_empty_rows[non_empty_rows.duplicated(
-                    subset=columns, keep=False)]
+            if selected_category_column not in df.columns:
+                return jsonify({
+                    'error':
+                    f'選擇的類別欄位 "{selected_category_column}" 不存在，請檢查輸入'
+                }), 400
+
+            # 檢查類別是否重複
+            duplicates = non_empty_rows[
+                non_empty_rows.duplicated(subset=columns, keep=False)
+                & ~non_empty_rows.duplicated(
+                    subset=columns + [selected_category_column], keep=False)]
         else:
             # 檢查指定欄位的重複資料
             duplicates = non_empty_rows[non_empty_rows.duplicated(

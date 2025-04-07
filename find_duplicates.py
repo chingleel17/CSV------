@@ -7,6 +7,7 @@ path = "C:/users/kere4/Downloads/{file_name}"
 
 def find_duplicates(input_file, output_file, header_line=1):
     # 讀取CSV文件，確保正確處理中文編碼
+    header_line = int(header_line) - 1  # 將行號轉換為索引（從 0 開始）
     df = pd.read_csv(input_file, encoding='utf-8-sig', header=header_line)
     # 清理欄位名稱，去除多餘的空格和換行符號
     df.columns = df.columns.str.strip().str.replace('\n',
@@ -28,8 +29,10 @@ def find_duplicates(input_file, output_file, header_line=1):
 def find_duplicates_with_different_categories(input_file,
                                               output_file,
                                               header_line=1):
+
+    header_line = int(header_line) - 1  # 將行號轉換為索引（從 0 開始）
     # 讀取CSV文件，確保正確處理中文編碼
-    df = pd.read_csv(input_file, encoding='utf-8-sig')
+    df = pd.read_csv(input_file, encoding='utf-8-sig', header=header_line)
     # 清理欄位名稱，去除多餘的空格和換行符號
     df.columns = df.columns.str.strip().str.replace('\n',
                                                     '').str.replace('\r', '')
@@ -55,6 +58,8 @@ def find_duplicates_with_different_categories(input_file,
 
 def update_original_file(input_file, duplicates, header_line=1):
     # 讀取原始文件
+
+    header_line = int(header_line) - 1  # 將行號轉換為索引（從 0 開始）
     df = pd.read_csv(input_file, encoding='utf-8-sig', header=header_line)
     # 清理欄位名稱，去除多餘的空格和換行符號
     df.columns = df.columns.str.strip().str.replace('\n',
@@ -73,6 +78,7 @@ def update_original_file(input_file, duplicates, header_line=1):
 
 def remove_duplicates(input_file, output_file, header_line=1):
     # 讀取CSV文件，確保正確處理中文編碼
+    header_line = int(header_line) - 1  # 將行號轉換為索引（從 0 開始）
     df = pd.read_csv(input_file, encoding='utf-8-sig', header=header_line)
     # 清理欄位名稱，去除多餘的空格和換行符號
     df.columns = df.columns.str.strip().str.replace('\n',
@@ -110,9 +116,9 @@ def remove_duplicates(input_file, output_file, header_line=1):
 
 if __name__ == "__main__":
     # input_file = "C:/users/kere4/Downloads/AI文本與測試-真實案例蒐集202503-2.csv"  # 輸入文件名
-    input_file = "C:/users/kere4/Downloads/AI文本與測試-AI案例複審.csv"  # 輸入文件名
+    # input_file = "C:/users/kere4/Downloads/AI文本與測試-AI案例複審.csv"  # 輸入文件名
     #input_file = "D:/ching/文件資料/技術部共用/AI測試資料/AI文本與測試-真實案例蒐集202503.csv"  # 輸入文件名
-    #input_file = "D:/ching/文件資料/技術部共用/AI測試資料/AI知識庫.csv"  # 輸入文件名
+    input_file = "D:/ching/文件資料/技術部共用/AI測試資料/AI知識庫.csv"  # 輸入文件名
     #input_file = "output.csv"  # 輸出文件名
     #input_file = "D:/ching/文件資料/技術部共用/AI測試資料/分類資料庫-新.csv"  # 輸入文件名
     output_file = "duplicates.csv"  # 輸出文件名
@@ -120,11 +126,11 @@ if __name__ == "__main__":
     if not os.path.exists(input_file):
         print(f"錯誤：找不到輸入文件 {input_file}")
     else:
-        duplicates = find_duplicates(input_file, output_file, header_line=1)
+        # duplicates = find_duplicates(input_file, output_file, header_line=1)
 
         # 更新原始文件
         #update_original_file(input_file, duplicates)
-        #remove_duplicates(input_file, 'output.csv')
+        remove_duplicates(input_file, 'output.csv')
         # 查找重複但類別不同的記錄
         # duplicates_with_different_categories = find_duplicates_with_different_categories(
         #     input_file, "duplicates_with_different_categories.csv")

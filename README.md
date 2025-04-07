@@ -72,3 +72,165 @@
 - 支援直接從 Lark API 獲取文件（若適用）。
 - 增加多語言支援。
 - 提供更詳細的檢查報告，例如重複資料的統計資訊。
+
+---
+
+# CSV 匯入向量資料庫工具
+
+## 簡介
+此工具允許使用者上傳 CSV 文件，預覽資料，選擇標題行，並將資料寫入向量資料庫。支援 Metadata 和 pagecontext 的格式，適合需要將結構化資料轉換為向量資料的應用場景。
+
+---
+
+## 功能
+
+1. **檔案上傳**
+   - 支援 CSV 文件上傳。
+   - 使用者可以選擇標題行。
+
+2. **資料預覽**
+   - 上傳後顯示前 5 行資料供使用者檢查。
+   - 顯示檔案的欄位名稱。
+
+3. **向量資料庫寫入**
+   - 將資料轉換為向量格式並寫入資料庫。
+   - 支援 Metadata 和 pagecontext 的格式。
+
+4. **Metadata 支援**
+   - 使用者可以選擇 Metadata 欄位，並將其與資料一起寫入。
+
+---
+
+## 使用方式
+
+### 1. 啟動應用程式
+
+#### 使用 Docker
+
+1. 確保已安裝 Docker。
+2. 在專案目錄下執行以下指令建構 Docker 映像檔：
+   ```bash
+   docker build -t csv_to_vector_tool .
+   ```
+3. 啟動容器：
+   ```bash
+   docker run -p 5000:5000 csv_to_vector_tool
+   ```
+4. 在瀏覽器中開啟 `http://127.0.0.1:5000` 使用工具。
+
+#### 使用本地環境
+
+1. 確保已安裝 Python 3.9 或更新版本。
+2. 安裝相依套件：
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. 啟動應用程式：
+   ```bash
+   python find_duplicates_web/app.py
+   ```
+4. 在瀏覽器中開啟 `http://127.0.0.1:5000` 使用工具。
+
+---
+
+### 2. 上傳 CSV 文件
+
+1. 點擊「上傳 CSV 文件」按鈕，選擇要上傳的文件。
+2. 選擇標題行（預設為第 1 行）。
+3. 點擊「上傳檔案」按鈕。
+
+---
+
+### 3. 預覽資料
+
+1. 上傳成功後，工具會顯示前 5 行資料供檢查。
+2. 使用者可以檢查欄位名稱是否正確。
+
+---
+
+### 4. 選擇欄位並寫入向量資料庫
+
+1. 選擇要寫入的欄位。
+2. 選擇 Metadata 欄位（可選）。
+3. 選擇 pagecontext 欄位（可選）。
+4. 點擊「寫入向量資料庫」按鈕。
+
+---
+
+## API 文件
+
+### 上傳檔案
+
+**端點**：`POST /upload`
+
+**參數**：
+- `file`：上傳的 CSV 文件。
+- `header_line`：標題行的行號（預設為 1）。
+
+**回應**：
+- `preview`：前 5 行資料。
+- `columns`：欄位名稱。
+- `total_rows`：總行數。
+
+---
+
+### 寫入向量資料庫
+
+**端點**：`POST /write_to_vector_db`
+
+**參數**：
+- `file_content`：CSV 文件內容。
+- `columns`：選擇的欄位。
+- `metadata_columns`：選擇的 Metadata 欄位。
+- `pagecontext_column`：選擇的 pagecontext 欄位。
+
+**回應**：
+- `message`：寫入成功或失敗的訊息。
+
+---
+
+## 注意事項
+
+1. 確保 CSV 文件的編碼為 UTF-8。
+2. 確保選擇的欄位名稱正確無誤。
+3. 如果遇到問題，請檢查伺服器日誌以獲取詳細資訊。
+
+---
+
+## 範例
+
+### 上傳檔案範例
+
+1. 上傳的 CSV 文件內容：
+   ```csv
+   Name, Age, City
+   Alice, 30, New York
+   Bob, 25, Los Angeles
+   Charlie, 35, Chicago
+   ```
+
+2. 預覽結果：
+   ```json
+   {
+       "preview": [
+           {"Name": "Alice", "Age": 30, "City": "New York"},
+           {"Name": "Bob", "Age": 25, "City": "Los Angeles"},
+           {"Name": "Charlie", "Age": 35, "City": "Chicago"}
+       ],
+       "columns": ["Name", "Age", "City"],
+       "total_rows": 3
+   }
+   ```
+
+### 寫入向量資料庫範例
+
+1. 選擇的欄位：`Name`, `Age`
+2. Metadata 欄位：`City`
+3. pagecontext 欄位：`Name`
+
+4. 寫入結果：
+   ```json
+   {
+       "message": "資料已成功寫入向量資料庫"
+   }
+   ```

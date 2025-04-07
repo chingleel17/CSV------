@@ -228,6 +228,7 @@
             }
 
             const checkCategories = document.getElementById('checkCategories').checked;
+            const selectedCategoryColumn = document.getElementById('categoryDropdown').value; // 獲取選擇的類別欄位
 
             // 顯示檢查 loading 圈圈
             const loadingResultIndicator = document.getElementById('loadingResult');
@@ -239,7 +240,12 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ file_content: window.fileContent, columns: selectedColumns, check_categories: checkCategories })
+                    body: JSON.stringify({
+                        file_content: window.fileContent,
+                        columns: selectedColumns,
+                        check_categories: checkCategories,
+                        selected_category_column: selectedCategoryColumn // 傳遞選擇的類別欄位
+                    })
                 });
 
                 const checkResult = await checkResponse.json();
@@ -462,7 +468,7 @@
 
         <div>
             <input type="checkbox" id="checkCategories" onchange="toggleCategoryDropdown()" />
-            <label for="checkCategories">檢查類別是否重複</label>
+            <label for="checkCategories">檢查類別是否錯誤</label>
             <select id="categoryDropdown" style="display: none;">
                 <!-- 動態生成的選項會放在這裡 -->
             </select>
