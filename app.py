@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 import pandas as pd
+import numpy as np
 import io
 from pydantic import BaseModel
 
@@ -83,18 +84,53 @@ async def check_duplicates(request: CheckDuplicatesRequest):
         if df.empty:
             return JSONResponse(content={"error": "CSV 文件內容為空，無法進行檢查"},
                                 status_code=400)
+        df = df.dropna(how='all')  # 移除所有欄位皆為空的行
+        df = df[~df.apply(lambda row: row.astype(str).str.strip().eq('').all(),
+                          axis=1)]  # 移除僅包含空白字元的行
+        non_empty_rows = df.copy()
+        for col in request.columns:
+            # 若該欄位的值為空白、NaN 或空字串，則跳過該筆資料
+            non_empty_rows = non_empty_rows[~(
+                non_empty_rows[col].isna()
+                | non_empty_rows[col].astype(str).str.strip().eq(''))]
 
         if request.check_categories and request.selected_category_column:
-            duplicates = df[
-                df.duplicated(subset=request.columns, keep=False)
-                & ~df.duplicated(subset=request.columns +
-                                 [request.selected_category_column],
-                                 keep=False)]
-        else:
-            duplicates = df[df.duplicated(subset=request.columns, keep=False)]
+            if request.selected_category_column not in df.columns:
+                return JSONResponse(content={
+                    'error':
+                    f'選擇的類別欄位 "{request.selected_category_column}" 不存在，請檢查輸入'
+                },
+                                    status_code=400)
 
+            duplicates = non_empty_rows[
+                non_empty_rows.duplicated(subset=request.columns, keep=False)
+                &
+                ~non_empty_rows.duplicated(subset=request.columns +
+                                           [request.selected_category_column],
+                                           keep=False)]
+        else:
+            # 檢查指定欄位的重複資料
+            duplicates = non_empty_rows[non_empty_rows.duplicated(
+                subset=request.columns, keep=False)]
+            print(duplicates)
+
+        # 更嚴格地處理 NaN 值
+        # 使用 replace 將所有 NaN 值替換為 None
+        duplicates = duplicates.replace({
+            np.nan: None,
+            float('nan'): None,
+            'NaN': None,
+            'nan': None
+        })
         if duplicates.empty:
             return {"message": "未找到重複資料", "duplicates": []}
+        # 確保在檢查重複資料時，保留所有相關資料
+        duplicates = duplicates.reset_index(drop=True)  # 重置索引，避免因過濾導致的索引錯誤
+
+        # 在返回前，將檢查結果的總數加入回應中
+        total_duplicates = len(duplicates)
+        duplicates_preview = duplicates.where(pd.notnull(duplicates),
+                                              None).to_dict(orient='records')
 
         return {
             "message": f"找到 {len(duplicates)} 筆重複資料",
@@ -143,8 +179,16 @@ async def generate_pivot(request: GeneratePivotRequest):
             '分類': (pivot_table.get('正確', 0).sum() / pivot_table['總計'].sum() *
                    100).round(2).astype(str) + '%'
         }
+        # 將子類別欄位進行排序（排除總計行）
+        pivot_table = pivot_table.sort_values(
+            by=[request.subcategory_column],
+            key=lambda col: col.map(lambda x: ''
+                                    if x == '總計' else x)  # 確保 "總計" 行在最後
+        ).reset_index(drop=True)
+
         pivot_table = pd.concat(
             [pivot_table, pd.DataFrame([total_row])], ignore_index=True)
+        # 調整輸出順序
         pivot_table = pivot_table[[
             request.subcategory_column, '正確', '錯誤', '總計', '分類'
         ]]

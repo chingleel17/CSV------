@@ -272,8 +272,10 @@
                     alert(result.error);
                 } else {
                     console.log('Duplicate check result:', result.duplicates);
-                    console.log('Duplicate check result:', checkResult.duplicates);
-
+                    if (result.duplicates.length === 0) {
+                        alert('沒有找到重複資料！');
+                        return;
+                    }
                     // 顯示檢查結果表格
                     const resultTableContainer = document.getElementById('resultTableContainer');
                     resultTableContainer.style.display = 'block';
@@ -306,7 +308,7 @@
                     thead.appendChild(headerRow);
 
                     // 建立表格內容
-                    checkResult.duplicates.forEach(row => {
+                    result.duplicates.forEach(row => {
                         const tr = document.createElement('tr');
                         columnsOrder.forEach(column => {
                             const td = document.createElement('td');
@@ -322,7 +324,7 @@
                     resultTable.appendChild(table);
 
                     // 顯示重複資料數量
-                    document.getElementById('resultSummary').innerText = `找到 ${checkResult.duplicates.length} 筆重複資料`;
+                    document.getElementById('resultSummary').innerText = `找到 ${result.duplicates.length} 筆重複資料`;
 
                 }
             } catch (error) {
