@@ -101,15 +101,14 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            // 顯示 loading 圈圈
             const loadingIndicator = document.getElementById('loading');
             loadingIndicator.style.display = 'block';
 
-            const headerLine = document.getElementById('headerLine').value || 1; // 獲取標題行
+            const headerLine = document.getElementById('headerLine').value || 1;
 
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('header_line', headerLine); // 傳遞標題行資訊
+            formData.append('header_line', headerLine);
 
             try {
                 const response = await fetch('/upload', {
@@ -118,7 +117,7 @@
                 });
 
                 const result = await response.json();
-                loadingIndicator.style.display = 'none'; // 隱藏 loading 圈圈
+                loadingIndicator.style.display = 'none';
 
                 if (result.error) {
                     console.error('Error from server:', result.error);
@@ -138,6 +137,8 @@
                     const preview = result.preview;
                     const columns = result.columns;
                     const previewContainer = document.getElementById('preview');
+                    const subcategoryDropdown = document.getElementById('subcategoryColumn');
+                    const correctDropdown = document.getElementById('correctColumn');
                     const columnsContainer = document.getElementById('columns');
                     const displayColumnsContainer = document.getElementById('displayColumns');
 
@@ -145,6 +146,8 @@
                     previewContainer.innerHTML = '';
                     columnsContainer.innerHTML = '';
                     displayColumnsContainer.innerHTML = '';
+                    subcategoryDropdown.innerHTML = '';
+                    correctDropdown.innerHTML = '';
 
                     // 建立表格
                     const table = document.createElement('table');
@@ -166,8 +169,8 @@
                         const tr = document.createElement('tr');
                         columns.forEach(column => {
                             const td = document.createElement('td');
+                            td.setAttribute('data-column', column); // 設置數據屬性
                             td.textContent = row[column] || '';
-                            td.setAttribute('data-column', column);
                             tr.appendChild(td);
                         });
                         tbody.appendChild(tr);
@@ -212,9 +215,30 @@
 
                         displayColumnsContainer.appendChild(displayDiv);
                     });
+
+                    // 動態生成子類別和分類是否正確的選單，並進行排序
+                    const sortedColumns = [...columns].sort((a, b) => a.localeCompare(b, 'zh-TW'));
+
+                    sortedColumns.forEach(column => {
+                        const subcategoryOption = document.createElement('option');
+                        subcategoryOption.value = column;
+                        subcategoryOption.textContent = column;
+                        if (column == '正確子類別') {
+                            subcategoryOption.selected = true;
+                        }
+                        subcategoryDropdown.appendChild(subcategoryOption);
+
+                        const correctOption = document.createElement('option');
+                        correctOption.value = column;
+                        correctOption.textContent = column;
+                        if (column == '類別是否正確') {
+                            correctOption.selected = true;
+                        }
+                        correctDropdown.appendChild(correctOption);
+                    });
                 }
             } catch (error) {
-                loadingIndicator.style.display = 'none'; // 隱藏 loading 圈圈
+                loadingIndicator.style.display = 'none';
                 console.error('Error during file upload:', error);
                 alert('上傳失敗，請重試！');
             }
@@ -228,33 +252,26 @@
             }
 
             const checkCategories = document.getElementById('checkCategories').checked;
-            const selectedCategoryColumn = document.getElementById('categoryDropdown').value; // 獲取選擇的類別欄位
-
-            // 顯示檢查 loading 圈圈
-            const loadingResultIndicator = document.getElementById('loadingResult');
-            loadingResultIndicator.style.display = 'block';
+            const selectedCategoryColumn = document.getElementById('categoryDropdown').value;
 
             try {
-                const checkResponse = await fetch('/check_duplicates', {
+                const response = await fetch('/check_duplicates', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         file_content: window.fileContent,
                         columns: selectedColumns,
                         check_categories: checkCategories,
-                        selected_category_column: selectedCategoryColumn // 傳遞選擇的類別欄位
+                        selected_category_column: selectedCategoryColumn
                     })
                 });
 
-                const checkResult = await checkResponse.json();
-                loadingResultIndicator.style.display = 'none'; // 隱藏檢查 loading 圈圈
-
-                if (checkResult.error) {
-                    console.error('Error from server:', checkResult.error);
-                    alert(checkResult.error);
+                const result = await response.json();
+                if (result.error) {
+                    console.error('Error from server:', result.error);
+                    alert(result.error);
                 } else {
+                    console.log('Duplicate check result:', result.duplicates);
                     console.log('Duplicate check result:', checkResult.duplicates);
 
                     // 顯示檢查結果表格
@@ -306,9 +323,9 @@
 
                     // 顯示重複資料數量
                     document.getElementById('resultSummary').innerText = `找到 ${checkResult.duplicates.length} 筆重複資料`;
+
                 }
             } catch (error) {
-                loadingResultIndicator.style.display = 'none'; // 隱藏檢查 loading 圈圈
                 console.error('Error during duplicate check:', error);
                 alert('檢查失敗，請重試！');
             }
@@ -373,6 +390,7 @@
                 }
             } else {
                 categoryDropdown.style.display = 'none';
+
             }
         }
 
@@ -442,6 +460,72 @@
             // 更新排序狀態
             table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
         }
+
+        async function generatePivot() {
+            const subcategoryColumn = document.getElementById('subcategoryColumn').value;
+            const correctColumn = document.getElementById('correctColumn').value;
+
+            if (!subcategoryColumn || !correctColumn) {
+                alert('請選擇子類別和分類是否正確的欄位！');
+                return;
+            }
+
+            try {
+                const response = await fetch('/generate_pivot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_content: window.fileContent,
+                        subcategory_column: subcategoryColumn,
+                        correct_column: correctColumn
+                    })
+                });
+
+                const result = await response.json();
+                if (result.error) {
+                    console.error('Error from server:', result.error);
+                    alert(result.error);
+                } else {
+                    console.log('Pivot table result:', result.pivot_table);
+
+                    // 顯示樞紐分析結果
+                    const resultContainer = document.getElementById('pivotResult');
+                    resultContainer.innerHTML = '';
+
+                    const table = document.createElement('table');
+                    table.border = '1';
+                    const thead = document.createElement('thead');
+                    const tbody = document.createElement('tbody');
+
+                    // 建立表頭
+                    const headerRow = document.createElement('tr');
+                    Object.keys(result.pivot_table[0]).forEach(key => {
+                        const th = document.createElement('th');
+                        th.textContent = key;
+                        headerRow.appendChild(th);
+                    });
+                    thead.appendChild(headerRow);
+
+                    // 建立表格內容
+                    result.pivot_table.forEach(row => {
+                        const tr = document.createElement('tr');
+                        Object.values(row).forEach(value => {
+                            const td = document.createElement('td');
+                            td.textContent = value || ''; // 確保即使值為空也能顯示
+                            tr.appendChild(td);
+                        });
+                        tbody.appendChild(tr);
+                    });
+
+                    table.appendChild(thead);
+                    table.appendChild(tbody);
+                    resultContainer.appendChild(table);
+                }
+            } catch (error) {
+                console.error('Error during pivot generation:', error);
+                alert('生成樞紐分析失敗，請重試！');
+            }
+        }
     </script>
 </head>
 
@@ -491,7 +575,23 @@
             </table>
         </div>
 
-
+        <h2>樞紐分析工具</h2>
+        <div>
+            <label for="subcategoryColumn">子類別欄位：</label>
+            <select id="subcategoryColumn">
+                <!-- 動態生成的選項會放在這裡 -->
+            </select>
+        </div>
+        <div>
+            <label for="correctColumn">分類是否正確欄位：</label>
+            <select id="correctColumn">
+                <!-- 動態生成的選項會放在這裡 -->
+            </select>
+        </div>
+        <button onclick="generatePivot()">計算分數</button>
+        <div id="pivotResult" style="margin-top: 20px;">
+            <!-- 樞紐分析結果會顯示在這裡 -->
+        </div>
     </div>
 </body>
 
