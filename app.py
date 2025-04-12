@@ -179,10 +179,11 @@ async def generate_pivot(request: GeneratePivotRequest):
             '分類': (pivot_table.get('正確', 0).sum() / pivot_table['總計'].sum() *
                    100).round(2).astype(str) + '%'
         }
-        # 將子類別欄位進行排序（排除總計行）
+
+        # 將子類別欄位進行 A 到 Z 排序（排除總計行）
         pivot_table = pivot_table.sort_values(
             by=[request.subcategory_column],
-            key=lambda col: col.map(lambda x: ''
+            key=lambda col: col.map(lambda x: 'ZZZZZZ'
                                     if x == '總計' else x)  # 確保 "總計" 行在最後
         ).reset_index(drop=True)
 

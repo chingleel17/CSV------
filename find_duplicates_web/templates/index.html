@@ -302,7 +302,7 @@
                         th.textContent = column;
                         th.setAttribute('data-column', column);
                         th.classList.add('sortable');
-                        th.setAttribute('onclick', `sortTable(${index})`);
+                        th.setAttribute('onclick', `sortTable(${index},"resultTable")`); // 新增排序功能
                         headerRow.appendChild(th);
                     });
                     thead.appendChild(headerRow);
@@ -433,36 +433,6 @@
             handleFileChange({ target: fileInput });
         }
 
-        function sortTable(columnIndex) {
-            const table = document.getElementById('resultTable');
-            const rows = Array.from(table.querySelectorAll('tr:nth-child(n+2)'));
-            const isAscending = table.getAttribute('data-sort-order') === 'asc';
-
-            rows.sort((rowA, rowB) => {
-                const cellA = rowA.cells[columnIndex]?.textContent.trim() || '';
-                const cellB = rowB.cells[columnIndex]?.textContent.trim() || '';
-
-                if (!isNaN(cellA) && !isNaN(cellB)) {
-                    return isAscending ? cellA - cellB : cellB - cellA;
-                }
-
-                return isAscending
-                    ? cellA.localeCompare(cellB, undefined, { numeric: true })
-                    : cellB.localeCompare(cellA, undefined, { numeric: true });
-            });
-
-            // 清空表格內容，保留表頭
-            const thead = table.querySelector('thead');
-            const tbody = table.querySelector('tbody');
-            tbody.innerHTML = '';
-
-            // 重新插入排序後的行
-            rows.forEach(row => tbody.appendChild(row));
-
-            // 更新排序狀態
-            table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
-        }
-
         async function generatePivot() {
             const subcategoryColumn = document.getElementById('subcategoryColumn').value;
             const correctColumn = document.getElementById('correctColumn').value;
@@ -500,10 +470,14 @@
                     const tbody = document.createElement('tbody');
 
                     // 建立表頭
+                    //TODO 增加前端排序功能
                     const headerRow = document.createElement('tr');
-                    Object.keys(result.pivot_table[0]).forEach(key => {
+                    Object.keys(result.pivot_table[0]).forEach((key, index) => {
                         const th = document.createElement('th');
                         th.textContent = key;
+                        th.setAttribute('data-column', key);
+                        th.classList.add('sortable');
+                        th.setAttribute('onclick', `sortTable(${index},"pivotResult")`); // 新增排序功能
                         headerRow.appendChild(th);
                     });
                     thead.appendChild(headerRow);
@@ -528,6 +502,47 @@
                 alert('生成樞紐分析失敗，請重試！');
             }
         }
+
+        function sortTable(columnIndex, tableId) {
+            const table = document.getElementById(tableId);
+            const rows = Array.from(table.querySelectorAll('tbody tr')); // 確保只選取表格內容的行
+            const isAscending = table.getAttribute('data-sort-order') === 'asc';
+
+            // 過濾掉總計列
+            const totalRow = rows.find(row => row.textContent.includes('總計'));
+            const sortableRows = rows.filter(row => row !== totalRow);
+
+            sortableRows.sort((rowA, rowB) => {
+                const cellA = rowA.cells[columnIndex]?.textContent.trim() || '';
+                const cellB = rowB.cells[columnIndex]?.textContent.trim() || '';
+
+                // 如果是數字，進行數字排序
+                if (!isNaN(cellA) && !isNaN(cellB)) {
+                    return isAscending ? cellA - cellB : cellB - cellA;
+                }
+
+                // 如果是字串，進行字典排序
+                return isAscending
+                    ? cellA.localeCompare(cellB, undefined, { numeric: true })
+                    : cellB.localeCompare(cellA, undefined, { numeric: true });
+            });
+
+            // 清空表格內容，保留表頭
+            const tbody = table.querySelector('tbody');
+            tbody.innerHTML = '';
+
+            // 重新插入排序後的行
+            sortableRows.forEach(row => tbody.appendChild(row));
+
+            // 如果有總計列，將其放回表格的最後
+            if (totalRow) {
+                tbody.appendChild(totalRow);
+            }
+
+            // 更新排序狀態
+            table.setAttribute('data-sort-order', isAscending ? 'desc' : 'asc');
+        }
+
     </script>
 </head>
 
