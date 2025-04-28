@@ -21,6 +21,7 @@ Thumbs.db
 
 # 忽略上傳的檔案
 uploads/
+storage/
 
 # 忽略 CSV 測試檔案
 *.csv
