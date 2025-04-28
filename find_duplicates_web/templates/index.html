@@ -627,12 +627,29 @@
                 let csvContent = '\uFEFF' + lines[0] + ',檢查結果\n';
                 for (let i = 1; i < lines.length; i++) {
                     if (!lines[i].trim()) continue;
-                    let cells = lines[i].split(',');
-                    // if (updateIndex !== -1 && (cells[updateIndex] === undefined || cells[updateIndex].trim() === '')) {
-                    //     cells[updateIndex] = cells[aiindex]; // 將修正後的欄位設為原始資料
-                    // }
+                    let cells = [];
+                    let inQuotes = false;
+                    let cell = '';
+                    for (let j = 0; j < lines[i].length; j++) {
+                        const char = lines[i][j];
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                            cell += char;
+                        } else if (char === ',' && !inQuotes) {
+                            cells.push(cell);
+                            cell = '';
+                        } else {
+                            cell += char;
+                        }
+                    }
+                    cells.push(cell);
+                    if (updateIndex !== -1 && (cells[updateIndex] === undefined || cells[updateIndex].trim() === '')) {
+                        cells[updateIndex] = cells[aiindex];
+                    }
                     const annotate = annotateMap[i + 1] || '';
-                    csvContent += cells.join(',') + `,"${annotate}"\n`;
+                    // 匯出時每個欄位都加上雙引號並處理內部雙引號
+                    const safeCells = cells.map(cell => `"${(cell || '').replace(/"/g, '""')}"`);
+                    csvContent += safeCells.join(',') + `,"${annotate}"\n`;
                 }
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
