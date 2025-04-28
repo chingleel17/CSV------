@@ -97,10 +97,12 @@
         }
     </style>
     <script>
+        window.uploadedFileName = NaN
         async function handleFileChange(event) {
             const file = event.target.files[0];
+            window.uploadedFileName = NaN
             if (!file) return;
-
+            window.uploadedFileName = file.name; // 儲存目前檔案名稱
             const loadingIndicator = document.getElementById('loading');
             loadingIndicator.style.display = 'block';
 
@@ -285,10 +287,36 @@
                 loadingExport.style.display = 'none';
             }, 100);
         };
+        // 解析一行 CSV 字串為陣列，支援雙引號、逗號、換行
+        const parseCsvLine = (line) => {
+            const result = [];
+            let cell = '';
+            let inQuotes = false;
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                if (char === '"') {
+                    if (inQuotes && line[i + 1] === '"') {
+                        cell += '"'; // 連續兩個雙引號視為一個
+                        i++;
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(cell);
+                    cell = '';
+                } else {
+                    cell += char;
+                }
+            }
+            result.push(cell);
+            return result;
+        }
+        // 檢查標點符號
         const checkPunctuation = () => {
             const columns = window.fileContent.split('\n')[0].split(',').map(c => c.trim().replace(/\n|\r|"/g, ''));
             if (columns.length < 2) {
                 alert('請確認檔案有兩個以上欄位');
+
                 return;
             }
             const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
@@ -296,116 +324,121 @@
                 alert('請選擇兩個欄位進行檢查！');
                 return;
             }
+            const loadingExport = document.getElementById('loadingExport');
+            loadingExport.style.display = 'block';
+            setTimeout(() => {
 
-            const colA = selectedColumns[0];
-            const colB = selectedColumns[1];
+                const colA = selectedColumns[0];
+                const colB = selectedColumns[1];
 
-            // 取得欄位索引
-            const colIndexA = columns.indexOf(colA);
-            const colIndexB = columns.indexOf(colB);
+                // 取得欄位索引
+                const colIndexA = columns.indexOf(colA);
+                const colIndexB = columns.indexOf(colB);
 
-            const rows = window.fileContent.split('\n').slice(1).filter(line => line.trim() !== '');
-            const errors = [];
-            const punctuationRegex = /[.,!?;:，。！？；：、\n\r<>\/"'\(\)\[\]\{\}【】《》“”‘’]/g;
+                const rows = window.fileContent.split('\n').slice(1).filter(line => line.trim() !== '');
+                const errors = [];
+                const punctuationRegex = /[.,!?;:，。！？；：、\n\r<>\/"'\(\)\[\]\{\}【】《》“”‘’]/g;
 
-            rows.forEach((line, idx) => {
-                const cells = line.split(',');
-                if (cells.length <= Math.max(colIndexA, colIndexB)) return;
-                const textA = cells[colIndexA];
-                const textB = cells[colIndexB];
+                rows.forEach((line, idx) => {
+                    const cells = parseCsvLine(line);
+                    if (cells.length <= Math.max(colIndexA, colIndexB)) return;
+                    const textA = (cells[colIndexA] || '').replace(/^"(.*)"$/, '$1').replace(/""/g, '"');
+                    const textB = (cells[colIndexB] || '').replace(/^"(.*)"$/, '$1').replace(/""/g, '"');
 
-                const punctA = (textA.match(punctuationRegex) || []).sort().join('');
-                const punctB = (textB.match(punctuationRegex) || []).sort().join('');
+                    const punctA = (textA.match(punctuationRegex) || []).sort().join('');
+                    const punctB = (textB.match(punctuationRegex) || []).sort().join('');
 
-                if (punctA !== punctB) {
-                    // 找出A有B沒有、B有A沒有的標點
-                    let onlyInA = '';
-                    let onlyInB = '';
-                    let tempB = punctB;
-                    for (const ch of punctA) {
-                        const pos = tempB.indexOf(ch);
-                        if (pos === -1) {
-                            onlyInA += ch;
-                        } else {
-                            tempB = tempB.slice(0, pos) + tempB.slice(pos + 1);
+                    if (punctA !== punctB) {
+                        // 找出A有B沒有、B有A沒有的標點
+                        let onlyInA = '';
+                        let onlyInB = '';
+                        let tempB = punctB;
+                        for (const ch of punctA) {
+                            const pos = tempB.indexOf(ch);
+                            if (pos === -1) {
+                                onlyInA += ch;
+                            } else {
+                                tempB = tempB.slice(0, pos) + tempB.slice(pos + 1);
+                            }
                         }
-                    }
-                    let tempA = punctA;
-                    for (const ch of punctB) {
-                        const pos = tempA.indexOf(ch);
-                        if (pos === -1) {
-                            onlyInB += ch;
-                        } else {
-                            tempA = tempA.slice(0, pos) + tempA.slice(pos + 1);
+                        let tempA = punctA;
+                        for (const ch of punctB) {
+                            const pos = tempA.indexOf(ch);
+                            if (pos === -1) {
+                                onlyInB += ch;
+                            } else {
+                                tempA = tempA.slice(0, pos) + tempA.slice(pos + 1);
+                            }
                         }
+                        errors.push({
+                            row: idx + 2,
+                            原文: textA,
+                            翻譯: textB,
+                            原文標點: punctA,
+                            翻譯標點: punctB,
+                            原文多出: onlyInA,
+                            翻譯多出: onlyInB
+                        });
                     }
-                    errors.push({
-                        row: idx + 2,
-                        原文: textA,
-                        翻譯: textB,
-                        原文標點: punctA,
-                        翻譯標點: punctB,
-                        原文多出: onlyInA,
-                        翻譯多出: onlyInB
-                    });
-                }
-            });
-
-            // 顯示在檢查結果表格
-            const resultTableContainer = document.getElementById('resultTableContainer');
-            resultTableContainer.style.display = 'block';
-            let resultTable = document.getElementById('resultTable');
-            if (!resultTable) {
-                resultTable = document.createElement('table');
-                resultTable.id = 'resultTable';
-                resultTableContainer.appendChild(resultTable);
-            }
-            resultTable.innerHTML = '';
-
-            const table = document.createElement('table');
-            table.id = 'resultTable';
-            table.setAttribute('data-sort-order', 'asc');
-            const thead = document.createElement('thead');
-            const tbody = document.createElement('tbody');
-
-            // 建立表頭
-            const headerRow = document.createElement('tr');
-            ['行號', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach((col, index) => {
-                const th = document.createElement('th');
-                th.textContent = col;
-                th.setAttribute('data-column', col);
-                th.classList.add('sortable');
-                th.setAttribute('onclick', `sortTable(${index},"resultTable")`);
-                headerRow.appendChild(th);
-            });
-            thead.appendChild(headerRow);
-
-            // 建立表格內容
-            errors.forEach(row => {
-                const tr = document.createElement('tr');
-                ['row', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach(col => {
-                    const td = document.createElement('td');
-                    td.textContent = row[col] || '';
-                    td.setAttribute('data-column', col);
-                    tr.appendChild(td);
                 });
-                tbody.appendChild(tr);
-            });
 
-            table.appendChild(thead);
-            table.appendChild(tbody);
-            resultTable.appendChild(table);
-
-            // 顯示結果數量
-            document.getElementById('resultSummary').innerText =
-                errors.length === 0
-                    ? '所有資料標點符號皆一致！'
-                    : `發現 ${errors.length} 筆標點符號不一致`;
-
-            if (errors.length === 0) {
+                // 顯示在檢查結果表格
+                const resultTableContainer = document.getElementById('resultTableContainer');
+                resultTableContainer.style.display = 'block';
+                let resultTable = document.getElementById('resultTable');
+                if (!resultTable) {
+                    resultTable = document.createElement('table');
+                    resultTable.id = 'resultTable';
+                    resultTableContainer.appendChild(resultTable);
+                }
                 resultTable.innerHTML = '';
-                alert('所有資料標點符號皆一致！');
-            }
+
+                const table = document.createElement('table');
+                table.id = 'resultTable';
+                table.setAttribute('data-sort-order', 'asc');
+                const thead = document.createElement('thead');
+                const tbody = document.createElement('tbody');
+
+                // 建立表頭
+                const headerRow = document.createElement('tr');
+                ['行號', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach((col, index) => {
+                    const th = document.createElement('th');
+                    th.textContent = col;
+                    th.setAttribute('data-column', col);
+                    th.classList.add('sortable');
+                    th.setAttribute('onclick', `sortTable(${index},"resultTable")`);
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+
+                // 建立表格內容
+                errors.forEach(row => {
+                    const tr = document.createElement('tr');
+                    ['row', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach(col => {
+                        const td = document.createElement('td');
+                        td.textContent = row[col] || '';
+                        td.setAttribute('data-column', col);
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+
+                table.appendChild(thead);
+                table.appendChild(tbody);
+                resultTable.appendChild(table);
+
+                // 顯示結果數量
+                document.getElementById('resultSummary').innerText =
+                    errors.length === 0
+                        ? '所有資料標點符號皆一致！'
+                        : `發現 ${errors.length} 筆標點符號不一致`;
+
+                if (errors.length === 0) {
+                    resultTable.innerHTML = '';
+                    alert('所有資料標點符號皆一致！');
+                }
+                loadingExport.style.display = 'none';
+            }, 100);
         };
         async function checkDuplicates() {
             const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
@@ -584,25 +617,34 @@
             link.click();
             document.body.removeChild(link);
         }
-        const exportAnnotatedFile = () => {
+        // 將 CSV 單元格內容轉換為安全的格式
+        function csvSafe(cell) {
+            cell = cell || '';
+            if (cell.includes('"')) {
+                cell = cell.replace(/"/g, '""');
+            }
+            if (cell.includes(',') || cell.includes('\n') || cell.includes('"')) {
+                return `"${cell}"`;
+            }
+            return cell;
+        }
+        function exportAnnotatedFile() {
             // 顯示 loading
+            if (!window.fileContent) {
+                alert('請先上傳檔案並執行檢查！');
+                loadingExport.style.display = 'none';
+                return;
+            }
+            const lines = window.fileContent.split('\n');
+            if (lines.length < 2) {
+                alert('原始資料不足');
+                loadingExport.style.display = 'none';
+                return;
+            }
             const loadingExport = document.getElementById('loadingExport');
             loadingExport.style.display = 'block';
-
-
             setTimeout(() => {
                 // 主要匯出程式碼
-                if (!window.fileContent) {
-                    alert('請先上傳檔案並執行檢查！');
-                    loadingExport.style.display = 'none';
-                    return;
-                }
-                const lines = window.fileContent.split('\n');
-                if (lines.length < 2) {
-                    alert('原始資料不足');
-                    loadingExport.style.display = 'none';
-                    return;
-                }
                 const columns = lines[0].split(',').map(c => c.trim().replace(/\n|\r|"/g, ''));
                 const updateIndex = columns.indexOf('修正後');
                 const aiindex = columns.indexOf('ai出來');
@@ -648,14 +690,15 @@
                     }
                     const annotate = annotateMap[i + 1] || '';
                     // 匯出時每個欄位都加上雙引號並處理內部雙引號
-                    const safeCells = cells.map(cell => `"${(cell || '').replace(/"/g, '""')}"`);
+                    const safeCells = cells.map(csvSafe);
                     csvContent += safeCells.join(',') + `,"${annotate}"\n`;
                 }
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
+                const originalName = window.uploadedFileName ? window.uploadedFileName.replace(/(\.[^\.]+)?$/, '_更新檔案.csv') : '更新檔案.csv';
                 link.setAttribute('href', url);
-                link.setAttribute('download', '更新檔案.csv');
+                link.setAttribute('download', originalName);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);
@@ -664,7 +707,9 @@
                 loadingExport.style.display = 'none';
             }, 100);
         }
-        async function handleHeaderLineChange() {
+
+        const handleHeaderLineChange = async () => {
+
             const fileInput = document.getElementById('file');
             if (!fileInput.files[0]) {
                 alert('請先選擇檔案再更新標題行！');
