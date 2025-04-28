@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request, File, UploadFile, Form
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from logger_services import logger
 import pandas as pd
 import numpy as np
 import io
@@ -21,15 +22,47 @@ async def index(request: Request):
 
 
 @app.post('/upload')
-async def upload_file(file: UploadFile, header_line: int = Form(1)):
+async def upload_file(file: UploadFile,
+                      header_line: int = Form(1),
+                      sheet_name: str = Form(None)):
     try:
         content = await file.read()
-        df = pd.read_csv(io.BytesIO(content),
-                         encoding='utf-8-sig',
-                         header=header_line - 1)
+        filename = file.filename.lower()
+        file_type = filename.split('.')[-1]
+        if filename.endswith('.xlsx') or filename.endswith('.xls'):
+            excel_file = pd.ExcelFile(io.BytesIO(content))
+            # 若未指定工作表，先回傳所有工作表名稱
+            if not sheet_name:
+                return {
+                    "sheets": excel_file.sheet_names,
+                    "need_sheet_select": True
+                }
+            df = pd.read_excel(excel_file,
+                               sheet_name=sheet_name,
+                               header=header_line - 1)
+            file_type = "excel"
+            sheet_used = sheet_name
+        else:
+            # 嘗試自動偵測編碼
+            try:
+                df = pd.read_csv(io.BytesIO(content),
+                                 encoding='utf-8-sig',
+                                 header=header_line - 1)
+            except UnicodeDecodeError:
+                try:
+                    df = pd.read_csv(io.BytesIO(content),
+                                     encoding='big5',
+                                     header=header_line - 1)
+                except UnicodeDecodeError:
+                    df = pd.read_csv(io.BytesIO(content),
+                                     encoding='cp950',
+                                     header=header_line - 1)
+            file_type = "csv"
+            sheet_used = None
 
         if df.empty:
-            return JSONResponse(content={"error": "CSV 文件內容為空，無法進行處理"},
+            logger.error("文件內容為空無法處理")
+            return JSONResponse(content={"error": "文件內容為空，無法進行處理"},
                                 status_code=400)
 
         # 清理資料
@@ -41,9 +74,12 @@ async def upload_file(file: UploadFile, header_line: int = Form(1)):
         df = df.dropna(how='all')
         df = df.replace(r'^\s*$', pd.NA, regex=True)
         df = df.dropna(axis=1, how='all')
-        df = df[~df.apply(lambda row: row.astype(str).str.strip().eq('').all(),
-                          axis=1)]
-
+        # df = df[~df.apply(lambda row: row.astype(str).str.strip().eq('').all(),
+        #                   axis=1)]
+        # 修正這一行，避免 float 參與 ~ 運算
+        mask = df.apply(lambda row: row.astype(str).str.strip().eq('').all(),
+                        axis=1)
+        df = df[~mask]
         preview = df.head().to_dict(orient='records')
         columns = df.columns.tolist()
         total_rows = len(df)
@@ -52,9 +88,12 @@ async def upload_file(file: UploadFile, header_line: int = Form(1)):
             "preview": preview,
             "columns": columns,
             "total_rows": total_rows,
-            "file_content": df.to_csv(index=False, encoding='utf-8-sig')
+            "file_content": df.to_csv(index=False, encoding='utf-8-sig'),
+            "file_type": file_type,
+            "sheet_used": sheet_used
         }
     except Exception as e:
+        logger.error(f"File upload error: {str(e)}")
         return JSONResponse(content={
             "error":
             f"Unexpected error during file upload: {str(e)}"
@@ -202,6 +241,7 @@ async def generate_pivot(request: GeneratePivotRequest):
             "pivot_table": pivot_table.to_dict(orient='records')
         }
     except Exception as e:
+        logger.error(f"Generate pivot error: {str(e)}")
         return JSONResponse(content={"error": f"處理過程中發生錯誤: {str(e)}"},
                             status_code=500)
 

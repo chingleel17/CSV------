@@ -118,132 +118,295 @@
 
                 const result = await response.json();
                 loadingIndicator.style.display = 'none';
+                if (result.need_sheet_select) {
+                    // 顯示選擇工作表區塊
+                    const sheetSelectContainer = document.getElementById('sheetSelectContainer');
+                    const sheetSelect = document.getElementById('sheetSelect');
+                    const confirmBtn = document.getElementById('confirmSheetBtn');
+
+                    // 清空舊選項
+                    sheetSelect.innerHTML = '';
+                    // 新增選項
+                    result.sheets.forEach(sheet => {
+                        const option = document.createElement('option');
+                        option.value = sheet;
+                        option.textContent = sheet;
+                        sheetSelect.appendChild(option);
+                    });
+
+                    // 顯示區塊
+                    sheetSelectContainer.style.display = 'flex';
+                    confirmBtn.style.display = 'inline-block';
+
+                    // 綁定按鈕事件
+                    confirmBtn.onclick = async () => {
+                        formData.append('sheet_name', sheetSelect.value);
+                        const resp2 = await fetch('/upload', { method: 'POST', body: formData });
+                        const result2 = await resp2.json();
+                        showPreview(result2);
+                    };
+                    return;
+                }
 
                 if (result.error) {
                     console.error('Error from server:', result.error);
                     alert(result.error);
                 } else {
-                    console.log('Preview data:', result.preview);
-                    console.log('Columns:', result.columns);
-                    console.log('Total rows:', result.total_rows);
+                    sheetSelectContainer.style.display = 'none'; // 選完後隱藏
+                    showPreview(result);
 
-                    // 保存完整的檔案內容到 window.fileContent
-                    window.fileContent = result.file_content;
-
-                    // 顯示總筆數
-                    document.getElementById('totalRows').innerText = `總筆數: ${result.total_rows}`;
-
-                    // 顯示預覽資料
-                    const preview = result.preview;
-                    const columns = result.columns;
-                    const previewContainer = document.getElementById('preview');
-                    const subcategoryDropdown = document.getElementById('subcategoryColumn');
-                    const correctDropdown = document.getElementById('correctColumn');
-                    const columnsContainer = document.getElementById('columns');
-                    const displayColumnsContainer = document.getElementById('displayColumns');
-
-                    // 清空之前的內容
-                    previewContainer.innerHTML = '';
-                    columnsContainer.innerHTML = '';
-                    displayColumnsContainer.innerHTML = '';
-                    subcategoryDropdown.innerHTML = '';
-                    correctDropdown.innerHTML = '';
-
-                    // 建立表格
-                    const table = document.createElement('table');
-                    const thead = document.createElement('thead');
-                    const tbody = document.createElement('tbody');
-
-                    // 建立表頭
-                    const headerRow = document.createElement('tr');
-                    columns.forEach(column => {
-                        const th = document.createElement('th');
-                        th.textContent = column;
-                        th.setAttribute('data-column', column);
-                        headerRow.appendChild(th);
-                    });
-                    thead.appendChild(headerRow);
-
-                    // 建立表格內容
-                    preview.forEach(row => {
-                        const tr = document.createElement('tr');
-                        columns.forEach(column => {
-                            const td = document.createElement('td');
-                            td.setAttribute('data-column', column); // 設置數據屬性
-                            td.textContent = row[column] || '';
-                            tr.appendChild(td);
-                        });
-                        tbody.appendChild(tr);
-                    });
-
-                    table.appendChild(thead);
-                    table.appendChild(tbody);
-                    previewContainer.appendChild(table);
-
-                    // 動態生成檢查欄位和顯示欄位選單
-                    columns.forEach(column => {
-                        // 檢查欄位
-                        const checkCheckbox = document.createElement('input');
-                        checkCheckbox.type = 'checkbox';
-                        checkCheckbox.name = 'columns';
-                        checkCheckbox.value = column;
-
-                        const checkLabel = document.createElement('label');
-                        checkLabel.textContent = column;
-                        checkLabel.appendChild(checkCheckbox);
-
-                        const checkDiv = document.createElement('div');
-                        checkDiv.appendChild(checkCheckbox);
-                        checkDiv.appendChild(checkLabel);
-
-                        columnsContainer.appendChild(checkDiv);
-
-                        // 顯示欄位
-                        const displayCheckbox = document.createElement('input');
-                        displayCheckbox.type = 'checkbox';
-                        displayCheckbox.name = 'displayColumns';
-                        displayCheckbox.value = column;
-                        displayCheckbox.checked = true; // 預設顯示所有欄位
-
-                        const displayLabel = document.createElement('label');
-                        displayLabel.textContent = column;
-                        displayLabel.appendChild(displayCheckbox);
-
-                        const displayDiv = document.createElement('div');
-                        displayDiv.appendChild(displayCheckbox);
-                        displayDiv.appendChild(displayLabel);
-
-                        displayColumnsContainer.appendChild(displayDiv);
-                    });
-
-                    // 動態生成子類別和分類是否正確的選單，並進行排序
-                    const sortedColumns = [...columns].sort((a, b) => a.localeCompare(b, 'zh-TW'));
-
-                    sortedColumns.forEach(column => {
-                        const subcategoryOption = document.createElement('option');
-                        subcategoryOption.value = column;
-                        subcategoryOption.textContent = column;
-                        if (column == '正確子類別') {
-                            subcategoryOption.selected = true;
-                        }
-                        subcategoryDropdown.appendChild(subcategoryOption);
-
-                        const correctOption = document.createElement('option');
-                        correctOption.value = column;
-                        correctOption.textContent = column;
-                        if (column == '類別是否正確') {
-                            correctOption.selected = true;
-                        }
-                        correctDropdown.appendChild(correctOption);
-                    });
                 }
             } catch (error) {
                 loadingIndicator.style.display = 'none';
+
                 console.error('Error during file upload:', error);
                 alert('上傳失敗，請重試！');
             }
         }
 
+        const showPreview = (result) => {
+
+            console.log('Preview data:', result.preview);
+            console.log('Columns:', result.columns);
+            console.log('Total rows:', result.total_rows);
+
+            const loadingExport = document.getElementById('loadingExport');
+            loadingExport.style.display = 'block';
+            setTimeout(() => {
+                // 保存完整的檔案內容到 window.fileContent
+                window.fileContent = result.file_content;
+
+                // 顯示總筆數
+                document.getElementById('totalRows').innerText = `總筆數: ${result.total_rows}`;
+
+                // 顯示預覽資料
+                const preview = result.preview;
+                const columns = result.columns;
+                const previewContainer = document.getElementById('preview');
+                const subcategoryDropdown = document.getElementById('subcategoryColumn');
+                const correctDropdown = document.getElementById('correctColumn');
+                const columnsContainer = document.getElementById('columns');
+                const displayColumnsContainer = document.getElementById('displayColumns');
+
+                // 清空之前的內容
+                previewContainer.innerHTML = '';
+                columnsContainer.innerHTML = '';
+                displayColumnsContainer.innerHTML = '';
+                subcategoryDropdown.innerHTML = '';
+                correctDropdown.innerHTML = '';
+
+                // 建立表格
+                const table = document.createElement('table');
+                const thead = document.createElement('thead');
+                const tbody = document.createElement('tbody');
+
+                // 建立表頭
+                const headerRow = document.createElement('tr');
+                columns.forEach(column => {
+                    const th = document.createElement('th');
+                    th.textContent = column;
+                    th.setAttribute('data-column', column);
+                    headerRow.appendChild(th);
+                });
+                thead.appendChild(headerRow);
+
+                // 建立表格內容
+                preview.forEach(row => {
+                    const tr = document.createElement('tr');
+                    columns.forEach(column => {
+                        const td = document.createElement('td');
+                        td.setAttribute('data-column', column); // 設置數據屬性
+                        td.textContent = row[column] || '';
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+
+                table.appendChild(thead);
+                table.appendChild(tbody);
+                previewContainer.appendChild(table);
+
+                // 動態生成檢查欄位和顯示欄位選單
+                columns.forEach(column => {
+                    // 檢查欄位
+                    const checkCheckbox = document.createElement('input');
+                    checkCheckbox.type = 'checkbox';
+                    checkCheckbox.name = 'columns';
+                    checkCheckbox.value = column;
+
+                    const checkLabel = document.createElement('label');
+                    checkLabel.textContent = column;
+                    checkLabel.appendChild(checkCheckbox);
+
+                    const checkDiv = document.createElement('div');
+                    checkDiv.appendChild(checkCheckbox);
+                    checkDiv.appendChild(checkLabel);
+
+                    columnsContainer.appendChild(checkDiv);
+
+                    // 顯示欄位
+                    const displayCheckbox = document.createElement('input');
+                    displayCheckbox.type = 'checkbox';
+                    displayCheckbox.name = 'displayColumns';
+                    displayCheckbox.value = column;
+                    displayCheckbox.checked = true; // 預設顯示所有欄位
+
+                    const displayLabel = document.createElement('label');
+                    displayLabel.textContent = column;
+                    displayLabel.appendChild(displayCheckbox);
+
+                    const displayDiv = document.createElement('div');
+                    displayDiv.appendChild(displayCheckbox);
+                    displayDiv.appendChild(displayLabel);
+
+                    displayColumnsContainer.appendChild(displayDiv);
+                });
+
+                // 動態生成子類別和分類是否正確的選單，並進行排序
+                const sortedColumns = [...columns].sort((a, b) => a.localeCompare(b, 'zh-TW'));
+
+                sortedColumns.forEach(column => {
+                    const subcategoryOption = document.createElement('option');
+                    subcategoryOption.value = column;
+                    subcategoryOption.textContent = column;
+                    if (column == '正確子類別') {
+                        subcategoryOption.selected = true;
+                    }
+                    subcategoryDropdown.appendChild(subcategoryOption);
+
+                    const correctOption = document.createElement('option');
+                    correctOption.value = column;
+                    correctOption.textContent = column;
+                    if (column == '類別是否正確') {
+                        correctOption.selected = true;
+                    }
+                    correctDropdown.appendChild(correctOption);
+                });
+                loadingExport.style.display = 'none';
+            }, 100);
+        };
+        const checkPunctuation = () => {
+            const columns = window.fileContent.split('\n')[0].split(',').map(c => c.trim().replace(/\n|\r|"/g, ''));
+            if (columns.length < 2) {
+                alert('請確認檔案有兩個以上欄位');
+                return;
+            }
+            const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
+            if (selectedColumns.length !== 2) {
+                alert('請選擇兩個欄位進行檢查！');
+                return;
+            }
+
+            const colA = selectedColumns[0];
+            const colB = selectedColumns[1];
+
+            // 取得欄位索引
+            const colIndexA = columns.indexOf(colA);
+            const colIndexB = columns.indexOf(colB);
+
+            const rows = window.fileContent.split('\n').slice(1).filter(line => line.trim() !== '');
+            const errors = [];
+            const punctuationRegex = /[.,!?;:，。！？；：、\n\r<>\/"'\(\)\[\]\{\}【】《》“”‘’]/g;
+
+            rows.forEach((line, idx) => {
+                const cells = line.split(',');
+                if (cells.length <= Math.max(colIndexA, colIndexB)) return;
+                const textA = cells[colIndexA];
+                const textB = cells[colIndexB];
+
+                const punctA = (textA.match(punctuationRegex) || []).sort().join('');
+                const punctB = (textB.match(punctuationRegex) || []).sort().join('');
+
+                if (punctA !== punctB) {
+                    // 找出A有B沒有、B有A沒有的標點
+                    let onlyInA = '';
+                    let onlyInB = '';
+                    let tempB = punctB;
+                    for (const ch of punctA) {
+                        const pos = tempB.indexOf(ch);
+                        if (pos === -1) {
+                            onlyInA += ch;
+                        } else {
+                            tempB = tempB.slice(0, pos) + tempB.slice(pos + 1);
+                        }
+                    }
+                    let tempA = punctA;
+                    for (const ch of punctB) {
+                        const pos = tempA.indexOf(ch);
+                        if (pos === -1) {
+                            onlyInB += ch;
+                        } else {
+                            tempA = tempA.slice(0, pos) + tempA.slice(pos + 1);
+                        }
+                    }
+                    errors.push({
+                        row: idx + 2,
+                        原文: textA,
+                        翻譯: textB,
+                        原文標點: punctA,
+                        翻譯標點: punctB,
+                        原文多出: onlyInA,
+                        翻譯多出: onlyInB
+                    });
+                }
+            });
+
+            // 顯示在檢查結果表格
+            const resultTableContainer = document.getElementById('resultTableContainer');
+            resultTableContainer.style.display = 'block';
+            let resultTable = document.getElementById('resultTable');
+            if (!resultTable) {
+                resultTable = document.createElement('table');
+                resultTable.id = 'resultTable';
+                resultTableContainer.appendChild(resultTable);
+            }
+            resultTable.innerHTML = '';
+
+            const table = document.createElement('table');
+            table.id = 'resultTable';
+            table.setAttribute('data-sort-order', 'asc');
+            const thead = document.createElement('thead');
+            const tbody = document.createElement('tbody');
+
+            // 建立表頭
+            const headerRow = document.createElement('tr');
+            ['行號', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach((col, index) => {
+                const th = document.createElement('th');
+                th.textContent = col;
+                th.setAttribute('data-column', col);
+                th.classList.add('sortable');
+                th.setAttribute('onclick', `sortTable(${index},"resultTable")`);
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            // 建立表格內容
+            errors.forEach(row => {
+                const tr = document.createElement('tr');
+                ['row', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach(col => {
+                    const td = document.createElement('td');
+                    td.textContent = row[col] || '';
+                    td.setAttribute('data-column', col);
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            resultTable.appendChild(table);
+
+            // 顯示結果數量
+            document.getElementById('resultSummary').innerText =
+                errors.length === 0
+                    ? '所有資料標點符號皆一致！'
+                    : `發現 ${errors.length} 筆標點符號不一致`;
+
+            if (errors.length === 0) {
+                resultTable.innerHTML = '';
+                alert('所有資料標點符號皆一致！');
+            }
+        };
         async function checkDuplicates() {
             const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
             if (selectedColumns.length === 0) {
@@ -421,7 +584,69 @@
             link.click();
             document.body.removeChild(link);
         }
+        const exportAnnotatedFile = () => {
+            // 顯示 loading
+            const loadingExport = document.getElementById('loadingExport');
+            loadingExport.style.display = 'block';
 
+
+            setTimeout(() => {
+                // 主要匯出程式碼
+                if (!window.fileContent) {
+                    alert('請先上傳檔案並執行檢查！');
+                    loadingExport.style.display = 'none';
+                    return;
+                }
+                const lines = window.fileContent.split('\n');
+                if (lines.length < 2) {
+                    alert('原始資料不足');
+                    loadingExport.style.display = 'none';
+                    return;
+                }
+                const columns = lines[0].split(',').map(c => c.trim().replace(/\n|\r|"/g, ''));
+                const updateIndex = columns.indexOf('修正後');
+                const aiindex = columns.indexOf('ai出來');
+                const resultTable = document.getElementById('resultTable');
+                if (!resultTable || resultTable.querySelectorAll('tr').length <= 1) {
+                    alert('沒有可標註的檢查結果');
+                    loadingExport.style.display = 'none';
+                    return;
+                }
+                const resultRows = Array.from(resultTable.querySelectorAll('tbody tr'));
+                const annotateMap = {};
+                const isPunctuation = resultTable.querySelector('th[data-column="缺少標點"]') || resultTable.querySelector('th[data-column="原文多出"]');
+                resultRows.forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    const rowNum = parseInt(cells[0].textContent, 10);
+                    if (isPunctuation) {
+                        annotateMap[rowNum] = `標點異常：原文多出[${cells[5].textContent}], 翻譯多出[${cells[6].textContent}]`;
+                    } else {
+                        annotateMap[rowNum] = '重複資料';
+                    }
+                });
+                let csvContent = '\uFEFF' + lines[0] + ',檢查結果\n';
+                for (let i = 1; i < lines.length; i++) {
+                    if (!lines[i].trim()) continue;
+                    let cells = lines[i].split(',');
+                    // if (updateIndex !== -1 && (cells[updateIndex] === undefined || cells[updateIndex].trim() === '')) {
+                    //     cells[updateIndex] = cells[aiindex]; // 將修正後的欄位設為原始資料
+                    // }
+                    const annotate = annotateMap[i + 1] || '';
+                    csvContent += cells.join(',') + `,"${annotate}"\n`;
+                }
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', '更新檔案.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+
+                // 隱藏 loading
+                loadingExport.style.display = 'none';
+            }, 100);
+        }
         async function handleHeaderLineChange() {
             const fileInput = document.getElementById('file');
             if (!fileInput.files[0]) {
@@ -558,58 +783,68 @@
             <label for="headerLine">標題行：</label>
             <input type="number" id="headerLine" value="1" min="1" style="width: 60px;"
                 onchange="handleHeaderLineChange()" />
-        </div>
-        <div id="preview"></div>
-        <div id="totalRows"></div>
+            <div id="sheetSelectContainer" style="display: none;">
+                <label for="sheetSelect">選擇工作表：</label>
+                <select id="sheetSelect"></select>
+                <button id="confirmSheetBtn" onchange="handleFileChange()" style="display: none;">確定</button>
+            </div>
+            <div id="preview"></div>
+            <div id="totalRows"></div>
 
-        <h2>選擇檢查欄位</h2>
-        <div id="columns" class="checkbox-container" style="display: flex; flex-wrap: wrap; gap: 10px;">
-            <!-- 動態生成的欄位選單會放在這裡 -->
-        </div>
+            <h2>選擇檢查欄位</h2>
+            <div id="columns" class="checkbox-container" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                <!-- 動態生成的欄位選單會放在這裡 -->
+            </div>
 
-        <div>
-            <input type="checkbox" id="checkCategories" onchange="toggleCategoryDropdown()" />
-            <label for="checkCategories">檢查類別是否錯誤</label>
-            <select id="categoryDropdown" style="display: none;">
-                <!-- 動態生成的選項會放在這裡 -->
-            </select>
-        </div>
-        <button onclick="checkDuplicates()">檢查重複資料</button>
-        <button onclick="exportResults()">匯出檢查結果</button>
+            <div>
+                <input type="checkbox" id="checkCategories" onchange="toggleCategoryDropdown()" />
+                <label for="checkCategories">檢查類別是否錯誤</label>
+                <select id="categoryDropdown" style="display: none;">
+                    <!-- 動態生成的選項會放在這裡 -->
+                </select>
+            </div>
+            <button onclick="checkDuplicates()">檢查重複資料</button>
+            <button onclick="exportResults()">匯出檢查結果</button>
+            <button onclick="checkPunctuation()">檢查格式標點符號</button>
+            <button onclick="exportAnnotatedFile()">匯出更新檔案</button>
 
-        <h2>檢查結果</h2>
-        <div id="loadingResult" style="display: none; font-size: 16px; color: #555;">正在檢查重複資料，請稍候...</div>
-        <div id="displayColumns" class="checkbox-container"
-            style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
-            <!-- 動態生成的顯示欄位選單會放在這裡 -->
-        </div>
-        <button onclick="updateDisplayedColumns()">更新顯示欄位</button>
-        <div id="resultTableContainer" style="display: none;">
+            <h2>檢查結果</h2>
+            <div id="loadingResult" style="display: none; font-size: 16px; color: #555;">正在檢查重複資料，請稍候...</div>
+            <div id="displayColumns" class="checkbox-container"
+                style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px;">
+                <!-- 動態生成的顯示欄位選單會放在這裡 -->
+            </div>
+            <button onclick="updateDisplayedColumns()">更新顯示欄位</button>
+            <div id="resultTableContainer" style="display: none;">
 
-            <div id="resultSummary" style="margin-bottom: 10px; font-size: 16px; color: #333;"></div>
-            <table id="resultTable" data-sort-order="asc">
-                <!-- 檢查結果表格內容會動態生成 -->
-            </table>
-        </div>
+                <div id="resultSummary" style="margin-bottom: 10px; font-size: 16px; color: #333;"></div>
+                <table id="resultTable" data-sort-order="asc">
+                    <!-- 檢查結果表格內容會動態生成 -->
+                </table>
+            </div>
 
-        <h2>樞紐分析工具</h2>
-        <div>
-            <label for="subcategoryColumn">子類別欄位：</label>
-            <select id="subcategoryColumn">
-                <!-- 動態生成的選項會放在這裡 -->
-            </select>
+            <h2>樞紐分析工具</h2>
+            <div>
+                <label for="subcategoryColumn">子類別欄位：</label>
+                <select id="subcategoryColumn">
+                    <!-- 動態生成的選項會放在這裡 -->
+                </select>
+            </div>
+            <div>
+                <label for="correctColumn">分類是否正確欄位：</label>
+                <select id="correctColumn">
+                    <!-- 動態生成的選項會放在這裡 -->
+                </select>
+            </div>
+            <button onclick="generatePivot()">計算分數</button>
+            <div id="pivotResult" style="margin-top: 20px;">
+                <!-- 樞紐分析結果會顯示在這裡 -->
+            </div>
         </div>
-        <div>
-            <label for="correctColumn">分類是否正確欄位：</label>
-            <select id="correctColumn">
-                <!-- 動態生成的選項會放在這裡 -->
-            </select>
+        <div id="loadingExport"
+            style="display:none;position:fixed;top:40%;left:50%;transform:translate(-50%,-50%);background:#fff;padding:20px 40px;border-radius:8px;box-shadow:0 0 10px #aaa;font-size:18px;z-index:9999;">
+            處理中，請稍候...
         </div>
-        <button onclick="generatePivot()">計算分數</button>
-        <div id="pivotResult" style="margin-top: 20px;">
-            <!-- 樞紐分析結果會顯示在這裡 -->
-        </div>
-    </div>
 </body>
 
 </html>

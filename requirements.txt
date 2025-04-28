@@ -5,3 +5,4 @@ openpyxl
 uvicorn
 python-multipart
 jinja2
+colorlog
