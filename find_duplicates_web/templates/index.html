@@ -100,11 +100,11 @@
         window.uploadedFileName = NaN
         async function handleFileChange(event) {
             const file = event.target.files[0];
-            window.uploadedFileName = NaN
             if (!file) return;
-            window.uploadedFileName = file.name; // 儲存目前檔案名稱
             const loadingIndicator = document.getElementById('loading');
             loadingIndicator.style.display = 'block';
+            window.uploadedFileName = NaN
+            window.uploadedFileName = file.name; // 儲存目前檔案名稱
 
             const headerLine = document.getElementById('headerLine').value || 1;
 
@@ -311,8 +311,8 @@
             result.push(cell);
             return result;
         }
-        // 檢查標點符號
-        const checkPunctuation = () => {
+        // 檢查標點符號 前端版
+        const _checkPunctuation = () => {
             const columns = window.fileContent.split('\n')[0].split(',').map(c => c.trim().replace(/\n|\r|"/g, ''));
             if (columns.length < 2) {
                 alert('請確認檔案有兩個以上欄位');
@@ -440,6 +440,105 @@
                 loadingExport.style.display = 'none';
             }, 100);
         };
+        // 檢查標點符號 後端處理
+        async function checkPunctuation() {
+            const columns = window.fileContent.split('\n')[0].split(',').map(c => c.trim().replace(/\n|\r|"/g, ''));
+            if (columns.length < 2) {
+                alert('請確認檔案有兩個以上欄位');
+                return;
+            }
+            const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
+            if (selectedColumns.length !== 2) {
+                alert('請選擇兩個欄位進行檢查！');
+                return;
+            }
+            const loadingExport = document.getElementById('loadingExport');
+            loadingExport.style.display = 'block';
+            try {
+                const response = await fetch('/check_punctuation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_content: window.fileContent,
+                        columns: selectedColumns
+                    })
+                });
+                const result = await response.json();
+                // result.errors 為後端回傳的檢查結果
+                console.log('Punctuation check result:', result.errors);
+                if (result.error) {
+                    alert(result.error);
+                } else if (result.error_data) {
+                    renderPunctuationResult(result.error_data);
+                } else {
+                    alert(result.message || '未發現標點符號不一致');
+                    // 你也可以在這裡清空結果表格
+                }
+            } catch (e) {
+                alert('檢查失敗');
+                console.error('Error during punctuation check:', e);
+            }
+            loadingExport.style.display = 'none';
+        }
+        //顯示 標點符號不一致的結果
+        function renderPunctuationResult(error_data) {
+            // 顯示在檢查結果表格
+            const resultTableContainer = document.getElementById('resultTableContainer');
+            resultTableContainer.style.display = 'block';
+            let resultTable = document.getElementById('resultTable');
+            if (!resultTable) {
+                resultTable = document.createElement('table');
+                resultTable.id = 'resultTable';
+                resultTableContainer.appendChild(resultTable);
+            }
+            resultTable.innerHTML = '';
+
+            const table = document.createElement('table');
+            table.id = 'resultTable';
+            table.setAttribute('data-sort-order', 'asc');
+            const thead = document.createElement('thead');
+            const tbody = document.createElement('tbody');
+
+            // 建立表頭
+            const headerRow = document.createElement('tr');
+            ['行號', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach((col, index) => {
+                const th = document.createElement('th');
+                th.textContent = col;
+                th.setAttribute('data-column', col);
+                th.classList.add('sortable');
+                th.setAttribute('onclick', `sortTable(${index},"resultTable")`);
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            // 建立表格內容
+            error_data.forEach(row => {
+                const tr = document.createElement('tr');
+                ['row', '原文', '翻譯', '原文標點', '翻譯標點', '原文多出', '翻譯多出'].forEach(col => {
+                    const td = document.createElement('td');
+                    td.textContent = row[col] || '';
+                    td.setAttribute('data-column', col);
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
+
+            table.appendChild(thead);
+            table.appendChild(tbody);
+            resultTable.appendChild(table);
+
+            // 顯示結果數量
+            document.getElementById('resultSummary').innerText =
+                error_data.length === 0
+                    ? '所有資料標點符號皆一致！'
+                    : `發現 ${error_data.length} 筆標點符號不一致`;
+
+            if (error_data.length === 0) {
+                resultTable.innerHTML = '';
+                alert('所有資料標點符號皆一致！');
+            }
+
+        }
         async function checkDuplicates() {
             const selectedColumns = Array.from(document.querySelectorAll('input[name="columns"]:checked')).map(cb => cb.value);
             if (selectedColumns.length === 0) {
@@ -628,7 +727,8 @@
             }
             return cell;
         }
-        function exportAnnotatedFile() {
+        //前端的處理下載標點符號錯誤標註檔案
+        function _exportAnnotatedFile() {
             // 顯示 loading
             if (!window.fileContent) {
                 alert('請先上傳檔案並執行檢查！');
@@ -696,7 +796,7 @@
                 const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement('a');
-                const originalName = window.uploadedFileName ? window.uploadedFileName.replace(/(\.[^\.]+)?$/, '_更新檔案.csv') : '更新檔案.csv';
+                const originalName = window.uploadedFileName ? window.uploadedFileName.replace(/(\.[^\.]+)?$/, '_標點符號檢查檔案.csv') : '標點符號檢查.csv';
                 link.setAttribute('href', url);
                 link.setAttribute('download', originalName);
                 document.body.appendChild(link);
@@ -707,7 +807,53 @@
                 loadingExport.style.display = 'none';
             }, 100);
         }
+        //後端處理標點符號標註錯誤檔案下載
+        async function exportAnnotatedFile() {
+            if (!window.fileContent) {
+                alert('請先上傳檔案並執行檢查！');
+                return;
+            }
+            // 取得標註資訊
+            const resultTable = document.getElementById('resultTable');
+            if (!resultTable || resultTable.querySelectorAll('tr').length <= 1) {
+                alert('沒有可標註的檢查結果');
+                return;
+            }
+            const resultRows = Array.from(resultTable.querySelectorAll('tbody tr'));
+            const annotateMap = {};
+            const isPunctuation = resultTable.querySelector('th[data-column="缺少標點"]') || resultTable.querySelector('th[data-column="原文多出"]');
+            resultRows.forEach(tr => {
+                const cells = tr.querySelectorAll('td');
+                const rowNum = parseInt(cells[0].textContent, 10);
+                if (isPunctuation) {
+                    annotateMap[rowNum] = `標點異常：原文多出[${cells[5].textContent}], 翻譯多出[${cells[6].textContent}]`;
+                } else {
+                    annotateMap[rowNum] = '重複資料';
+                }
+            });
 
+            const response = await fetch('/export_annotated_file', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    file_content: window.fileContent,
+                    annotate_map: annotateMap,
+                    original_filename: window.uploadedFileName || ''
+                })
+            });
+            if (response.ok) {
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = (window.uploadedFileName ? window.uploadedFileName.replace(/(\.[^\.]+)?$/, '_標註檔案.csv') : '標註檔案.csv');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            } else {
+                alert('匯出失敗');
+            }
+        }
         const handleHeaderLineChange = async () => {
 
             const fileInput = document.getElementById('file');

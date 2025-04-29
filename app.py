@@ -1,19 +1,33 @@
 from fastapi import FastAPI, Request, File, UploadFile, Form
-from fastapi.responses import JSONResponse, HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
+# from fastapi.staticfiles import StaticFiles
 from logger_services import logger
 import pandas as pd
 import numpy as np
 import io
 from pydantic import BaseModel
+import urllib.parse
 
 app = FastAPI(title="Find Duplicates Web")
-app.mount("/static",
-          StaticFiles(directory="find_duplicates_web/static"),
-          name="static")
+# app.mount("/static",
+#           StaticFiles(directory="find_duplicates_web/static"),
+#           name="static")
 
 templates = Jinja2Templates(directory="find_duplicates_web/templates")
+
+
+class CheckDuplicatesRequest(BaseModel):
+    file_content: str
+    columns: list[str]
+    check_categories: bool = False
+    selected_category_column: str = None
+
+
+class GeneratePivotRequest(BaseModel):
+    file_content: str
+    subcategory_column: str
+    correct_column: str
 
 
 @app.get('/', response_class=HTMLResponse)
@@ -47,7 +61,8 @@ async def upload_file(file: UploadFile,
             try:
                 df = pd.read_csv(io.BytesIO(content),
                                  encoding='utf-8-sig',
-                                 header=header_line - 1)
+                                 header=header_line - 1,
+                                 on_bad_lines='skip')
             except UnicodeDecodeError:
                 try:
                     df = pd.read_csv(io.BytesIO(content),
@@ -99,19 +114,6 @@ async def upload_file(file: UploadFile,
             f"Unexpected error during file upload: {str(e)}"
         },
                             status_code=500)
-
-
-class CheckDuplicatesRequest(BaseModel):
-    file_content: str
-    columns: list[str]
-    check_categories: bool = False
-    selected_category_column: str = None
-
-
-class GeneratePivotRequest(BaseModel):
-    file_content: str
-    subcategory_column: str
-    correct_column: str
 
 
 @app.post('/check_duplicates')
@@ -177,6 +179,113 @@ async def check_duplicates(request: CheckDuplicatesRequest):
         }
     except Exception as e:
         return JSONResponse(content={"error": f"檢查過程中發生錯誤: {str(e)}"},
+                            status_code=500)
+
+
+@app.post('/check_punctuation')
+async def check_punctuation(data: dict):
+    file_content = data['file_content']
+    columns = data['columns']
+    try:
+        df = pd.read_csv(io.StringIO(file_content), on_bad_lines='skip')
+
+        colA, colB = columns
+        error_data = []
+        punctuation = set('.,!?;:，。！？；：、<>"\'()[]{}【】《》“”‘’')
+        for idx, row in df.iterrows():
+            textA = str(row[colA])
+            textB = str(row[colB])
+            punctA = sorted([c for c in textA if c in punctuation])
+            punctB = sorted([c for c in textB if c in punctuation])
+            if punctA != punctB:
+                error_data.append({
+                    "row": idx + 2,
+                    "原文": textA,
+                    "翻譯": textB,
+                    "原文標點": ''.join(punctA),
+                    "翻譯標點": ''.join(punctB),
+                    "原文多出": ''.join(set(punctA) - set(punctB)),
+                    "翻譯多出": ''.join(set(punctB) - set(punctA)),
+                })
+
+        if not error_data:
+            return JSONResponse(content={"message": "未發現標點符號不一致"},
+                                status_code=200)
+        else:
+            return JSONResponse(content={
+                "message":
+                "發現{}筆標點符號不一致的資料".format(len(error_data)),
+                "error_data":
+                error_data
+            },
+                                status_code=200)
+
+    except Exception as e:
+        logger.error(f"Check punctuation error: {str(e)}")
+        return JSONResponse(content={"error": f"檢查過程中發生錯誤: {str(e)}"},
+                            status_code=500)
+
+
+@app.post('/export_annotated_file')
+async def export_annotated_file(data: dict):
+    """下載標註檔案標點符號錯誤的檔案"""
+    file_content = data['file_content']
+    annotate_map = data['annotate_map']
+    original_filename = data.get('original_filename', '標註檔案.csv')
+    try:
+        df = pd.read_csv(
+            io.StringIO(file_content),
+            dtype=str,
+            encoding='utf-8-sig',
+        )
+
+        # 新增「檢查結果」欄位
+        df['檢查結果'] = ''
+        for row_num, note in annotate_map.items():
+            # row_num 是資料的實際行號（通常含標題行要 -2）
+            idx = int(row_num) - 2
+            if 0 <= idx < len(df):
+                df.at[idx, '檢查結果'] = note
+
+        # 清理資料中的特殊字元
+        for col in df.columns:
+            if df[col].dtype == 'object':  # 只處理字串欄位
+                df[col] = df[col].map(lambda x: str(x).replace('\x00', '').
+                                      strip() if pd.notna(x) else x)
+
+        # 匯出為 Excel
+        # output = io.BytesIO()
+        # with pd.ExcelWriter(output, engine='openpyxl', mode='wb') as writer:
+        #     df.to_excel(writer, index=False, sheet_name='標註結果')
+        # output.seek(0)
+
+        # return StreamingResponse(
+        #     output,
+        #     media_type=
+        #     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        #     headers={
+        #         "Content-Disposition":
+        #         f"attachment; filename={original_filename.replace('.csv', '_標註.xlsx').encode('utf-8').decode('latin-1', errors='replace')}"
+        #     })
+        # 匯出為 CSV
+        output = io.StringIO()
+        df.to_csv(output, index=False, encoding='utf-8-sig')
+        output.seek(0)
+        result_bytes = output.getvalue().encode('utf-8-sig')
+        # 處理檔名編碼問題
+        safe_filename = original_filename.replace('.csv', '_標註.csv')
+        # 使用 RFC5987 的方式處理非 ASCII 字元的檔名
+        encoded_filename = urllib.parse.quote(safe_filename)
+        return StreamingResponse(
+            io.BytesIO(result_bytes),
+            media_type='text/csv; charset=utf-8',
+            headers={
+                "Content-Disposition":
+                f"attachment; filename*=UTF-8''{encoded_filename}"
+            })
+    except Exception as e:
+        logger.error(f"匯出標註檔案失敗{e}")
+        return JSONResponse(content={"error": f"匯出失敗: {str(e)}"},
                             status_code=500)
 
 
